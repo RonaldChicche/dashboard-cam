@@ -25,30 +25,30 @@ def route_default():
 
 @blueprint.route('/login', methods=['GET', 'POST'])
 def login():
-    login_form = LoginForm(request.form)
-    if 'login' in request.form:
+    # login_form = LoginForm(request.form)
+    # if 'login' in request.form:
 
-        # read form data
-        username = request.form['username']
-        password = request.form['password']
+    #     # read form data
+    #     username = request.form['username']
+    #     password = request.form['password']
 
-        # Locate user
-        user = Users.query.filter_by(username=username).first()
+    #     # Locate user
+    #     user = Users.query.filter_by(username=username).first()
 
-        # Check the password
-        if user and verify_pass(password, user.password):
+    #     # Check the password
+    #     if user and verify_pass(password, user.password):
 
-            login_user(user)
-            return redirect(url_for('authentication_blueprint.route_default'))
+    #         login_user(user)
+    #         return redirect(url_for('authentication_blueprint.route_default'))
 
-        # Something (user or pass) is not ok
-        return render_template('accounts/login.html',
-                               msg='Wrong user or password',
-                               form=login_form)
+    #     # Something (user or pass) is not ok
+    #     return render_template('accounts/login.html',
+    #                            msg='Wrong user or password',
+    #                            form=login_form)
 
-    if not current_user.is_authenticated:
-        return render_template('accounts/login.html',
-                               form=login_form)
+    # if not current_user.is_authenticated:
+    #     return render_template('accounts/login.html',
+    #                            form=login_form)
     return redirect(url_for('home_blueprint.index'))
 
 
@@ -96,7 +96,7 @@ def register():
 @blueprint.route('/logout')
 def logout():
     logout_user()
-    return redirect(url_for('authentication_blueprint.login')) 
+    return redirect(url_for('home')) 
 
 # Errors
 
