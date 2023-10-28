@@ -291,7 +291,12 @@
   <script src="{{ config.ASSETS_ROOT }}/js/plugins/chartjs.min.js"></script>
   <script src="{{ config.ASSETS_ROOT }}/js/plc-app.js"></script>
   <script>
-    
+    const sidenav_main = document.getElementById('sidenav-main');
+    const toggleButton = document.getElementById('toggle-sidenav'); 
+    toggleButton.addEventListener('click', function(event) {
+      console.log('clicked');
+      sidenav_main.classList.toggle('d-none');
+    });
     // Get current date
     var today = new Date();
     var date = today.getDate()+'-'+(today.getMonth()+1)+'-'+today.getFullYear();

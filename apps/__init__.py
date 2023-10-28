@@ -12,11 +12,13 @@ from importlib import import_module
 from flask import request, jsonify, render_template_string
 
 from .lib import XmlRpcProxyManager, PLCDataSender, ImageClient
+from .ptz_app import *
 import base64
 
 
 db = SQLAlchemy()
 login_manager = LoginManager()
+ptz_application = PTZWebApp()
 
 def register_extensions(app):
     db.init_app(app)
@@ -148,4 +150,6 @@ def create_app(config):
     connect_devices(app)
     disconnect_devices(app)
     execute_detection(app)
+    # PTZ app functions
+    ptz_application.start(app)
     return app

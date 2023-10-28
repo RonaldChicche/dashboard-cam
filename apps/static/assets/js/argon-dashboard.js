@@ -26,6 +26,8 @@
   };
 })();
 
+// Sidenav dropdown
+
 // Verify navbar blur on scroll
 if (document.getElementById('navbarBlur')) {
   navbarBlurOnScroll('navbarBlur');
