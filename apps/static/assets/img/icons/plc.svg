@@ -1,0 +1,22 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 100 100"
+  width="100"
+  height="100"
+>
+  <!-- Circle background -->
+  <circle cx="50" cy="50" r="50" fill="#0A84FF" />
+
+  <!-- Draw the PLC body -->
+  <rect x="30" y="35" width="40" height="30" rx="5" ry="5" fill="white" />
+
+  <!-- Indicator lights -->
+  <circle cx="35" cy="45" r="2.5" fill="#FF3B30" />
+  <circle cx="35" cy="55" r="2.5" fill="#FF9500" />
+  <circle cx="45" cy="45" r="2.5" fill="#FFCC00" />
+  <circle cx="45" cy="55" r="2.5" fill="#4CD964" />
+
+  <!-- Ports/Interfaces -->
+  <rect x="55" y="45" width="10" height="5" rx="1" ry="1" fill="black" />
+  <rect x="55" y="55" width="10" height="5" rx="1" ry="1" fill="black" />
+</svg>
