@@ -25,7 +25,7 @@ class AlambresWebApp:
         # Connection
         try:
             self.connect_cameras()
-            # self.connect_plc()
+            self.connect_plc()
         except RuntimeError as e:
             print("Error: ", e)
 
@@ -112,6 +112,12 @@ class AlambresWebApp:
         
         print(cam_list)
 
+    def eliminar_outliers(self, lista, num_desviaciones=2):
+        media = sum(lista) / len(lista)
+        desviacion_estandar = (sum((x - media) ** 2 for x in lista) / len(lista)) ** 0.5
+        return [x for x in lista if abs(x - media) <= num_desviaciones * desviacion_estandar]
+
+    
     def detection_execution(self, app):
         """Return: {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}}"""
         # Execute detection
@@ -133,7 +139,7 @@ class AlambresWebApp:
         cameras = self.config[app]['cameras']
         differences = []
         for index in cam_list:
-            print(f"\t-> Camera {index}:")
+            print(f"\t-> Camera {index}:", end=" ")
             name = f"cam{index:02d}"
             # Get the camera dictionarie from the selected app by name
             cam = [cam for cam in cameras if cam['name'] == name][0]
@@ -151,17 +157,17 @@ class AlambresWebApp:
             # Get the result from the result_list by index
             result = result_list[index] 
             if result[0] == 0:
-                if abs(result[1]['y'] - set_point) <= 20:
+                if abs(result[1]['y'] - set_point) <= 25:
                     diff = 0
                     differences.append(diff)
                     continue
                  
                 if result[1]['y'] > set_point:
                     diff = result[1]['y'] - set_point
-                    print(f"\t-> Operation: {diff} = {result[1]['y']} - {set_point}")
+                    print(f"\t\t-> Operation: {diff} = {result[1]['y']} - {set_point}")
                 elif result[1]['y'] < set_point:
                     diff =  result[1]['y'] + self.config[app]['nudo']/self.config['scale']['pix2mm'] - set_point
-                    print(f"\t-> Operation: {diff} = {result[1]['y']} + {self.config[app]['nudo']/self.config['scale']['pix2mm']} - {set_point}")    
+                    print(f"\t\t-> Operation: {diff} = {result[1]['y']} + {self.config[app]['nudo']/self.config['scale']['pix2mm']} - {set_point}")    
                 # Differences
                 result_list[index][1]['diff'] = diff
                 differences.append(diff)
@@ -170,6 +176,9 @@ class AlambresWebApp:
         
 
         # Process differences
+        differences = self.eliminar_outliers(differences)
+        print(f"\t-> Differences out: {differences}")
+        # Calculate error   
         error = sum(differences)/len(differences) if len(differences) > 0 else 0
         error_mm = error * self.config['scale']['pix2mm']
         new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
@@ -182,15 +191,12 @@ class AlambresWebApp:
         jpg_images = self.image_manager.proc_image(jpg_images, result_list)
         img_path = os.path.join(os.path.dirname(__file__), r'lib/img')
         self.image_manager.save_images(jpg_images, path=img_path)
-        jpg_images = []
-        for i in range(4):
-            with open(img_path + f"/img_{i}.jpg", "rb") as f:
-                jpg_images.append(f.read())
-
-        image_data = jpg_images[0]
+        self.image_manager.save_image(jpg_images, path=img_path)
+        
+        with open(img_path + f"/all.jpg", "rb") as f:
+            image_data = f.read()
         # Encode image data as base64 string
         encoded_image = base64.b64encode(image_data).decode('utf-8')
-
         print("-> Images captured : DONE")
         
         self.plc_client.cam_states['RUNNING'] = False
@@ -199,7 +205,7 @@ class AlambresWebApp:
 
     def main(self):        
         # Release threads
-        # self.plc_client.start_reading()
+        self.plc_client.start_reading()
         
         self.prev_state = False
         self.plc_client.cam_states['RUNNING'] = False
@@ -221,7 +227,7 @@ class AlambresWebApp:
             if self.plc_client.plc_states["TRIG"] ^ self.prev_state:                
                 # Execute detection
                 # resp = self.detection_execution(self.plc_client.plc_struct['PROD_TYPE']) # returns a dictionarie
-                resp = self.detection_execution(0) # returns a dictionarie
+                resp = self.detection_execution(4) # returns a dictionarie
                 # Send to plc
                 self.plc_client.cam_struct["SP_POS"] = resp['new_point']
                 self.plc_client.cam_struct["SP_VEL"] = 15

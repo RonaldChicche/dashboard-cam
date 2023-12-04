@@ -129,6 +129,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 console.log(`Status: ${data.status}`);
                 console.log(`Error: ${data.error}`);
                 console.log(`New Point: ${data.new_point}`);
+                // Navegate through result_cam
+                
             })
             .catch(error => console.error(error));
         });

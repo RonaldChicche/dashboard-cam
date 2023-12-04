@@ -2,6 +2,7 @@
 import io
 import os
 import cv2
+import numpy as np
 from datetime import datetime
 import matplotlib.image as mpimg
 from collections import namedtuple
@@ -99,8 +100,7 @@ class ImageClient():
             # Get size of images
             img_h, img_w = img_list[i].shape
             img_list[i] = cv2.cvtColor(img_list[i], cv2.COLOR_BGR2RGB)            
-            img = img_list[i].copy()
-            
+            img = img_list[i].copy()            
             
             # Title and current time
             date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -114,41 +114,41 @@ class ImageClient():
                 continue
 
             obj = Objeto(int(result_list[i][1]['x']), 
-                         int(img_h - result_list[i][1]['y']), 
+                         int(result_list[i][1]['y']), 
                          int(result_list[i][1]['orientation']),
                          result_list[i][1]['merma'],
-                         result_list[i][1]['set-point'])
+                         result_list[i][1]['set_point'])
             # Print analysis on image
             # dx = img_w/2 - obj.x
             # dy = img_h/2 - obj.y
             dx = obj.x 
-            dy = obj.y
+            dy = img_h - obj.y
             
             # Draw margin lines
-            sp_s = (0, img_h - result_list[i][1]['set-point'])
-            sp_e = (img_w, img_h - result_list[i][1]['set-point'])
+            sp_s = (0, img_h - result_list[i][1]['set_point'])
+            sp_e = (img_w, img_h - result_list[i][1]['set_point'])
 
             ch_s = (0, int(img_h/2))
             ch_e = (img_w, int(img_h/2))
             cv_s = (int(img_w/2), 0)
             cv_e = (int(img_w/2), img_h)
 
-            cv2.circle(img, (obj.x, obj.y), 0, RED, 5)
+            cv2.circle(img, (obj.x, img_h - obj.y), 0, RED, 10)
             
             cv2.line(img, ch_s, ch_e, VIOLET, 1)
             cv2.line(img, cv_s, cv_e, VIOLET, 1)
             cv2.line(img, sp_e, sp_s, YELLOW, 1)
             
             # Draw difference
-            ldy_s = (obj.x, obj.y)
+            ldy_s = (obj.x, img_h - obj.y)
             ldy_e = (obj.x, int(img_h/2))
             cv2.line(img, ldy_s, ldy_e, (150, 0, 150), 1)
-            txt_dy = (obj.x+10, int((obj.y + img_h/2)/2))
-            cv2.putText(img, f"ubic: {dy}", (txt_dy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, VIOLET, 1)
+            txt_dy = (obj.x+10, int((img_h - obj.y + img_h/2)/2))
+            cv2.putText(img, f"ubic: {obj.y}", (txt_dy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, BLUE, 1)
 
             # Draw text from results
-            conf = str(round(result_list[i][1]['confidence'] * 10, 2)) + "%"
-            ori = str(round(result_list[i][1]['ori'], 2))
+            conf = str(round(result_list[i][1]['confidence'] * 100, 2)) + "%"
+            ori = str(round(result_list[i][1]['orientation'], 2)) + " o deg"
             cv2.putText(img, conf, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 1)
             cv2.putText(img, ori, (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 1)
             img_proc_list.append(img)
@@ -157,19 +157,22 @@ class ImageClient():
 
     def save_image(self, img_list, path):
         # order images from the list into matrix
-        self.img_matrix = []
-        for i in range(4):
-            if img_list[i] is None:
-                continue
-            self.img_matrix.append(img_list[i*4:(i+1)*4])
-        # concatenate images in the matrix
-        self.img_concat = []
-        for row in self.img_matrix:
-            self.img_concat.append(cv2.hconcat(row))
-        # concatenate rows
-        self.img_concat = cv2.vconcat(self.img_concat)
+        height, width = 480, 640
+        black_img = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Reemplaza None con la imagen negra
+        images = [img if img is not None else black_img for img in img_list]
+
+        # Reshape the list to a square matrix
+        n = int(np.ceil(np.sqrt(len(images))))
+        images += [black_img] * (n**2 - len(images))
+        matrix = [images[i*n:(i+1)*n] for i in range(n)]
+
+        # Concatena las imágenes en una matriz cuadrada
+        concat_img = cv2.vconcat([cv2.hconcat(row) for row in matrix])
+
         # save image
-        cv2.imwrite(path, self.img_concat)
+        cv2.imwrite(path + f"/all.jpg", concat_img)
 
     def save_images(self, img_list, path):
         # save images as jpg files in the path

@@ -296,6 +296,9 @@ class XmlRpcProxyManager:
         return results
 
     def execute_detection(self, cam_list, tries=2):
+        if len(cam_list) == 0:
+            return [None, None, None, None]
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(cam_list)) as executor:
             # cam_list es una lista de indeces de las camaras que se van a usar
             selected_proxies = [self.proxies[cam] for cam in cam_list]
@@ -308,6 +311,9 @@ class XmlRpcProxyManager:
         return results
     
     def get_images(self, cam_list):
+        if len(cam_list) == 0:
+            return [None, None, None, None]
+            
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(cam_list)) as executor:
             # Usar solo los primeros 'cam' proxies
             selected_proxies = [self.proxies[cam] for cam in cam_list]
