@@ -15,7 +15,7 @@
         },
         {
             "name": "cam01",
-            "enabled": true,
+            "enabled": false,
             "ip": "192.168.0.48"
         },
         {
@@ -25,7 +25,7 @@
         },  
         {
             "name": "cam03",
-            "enabled": true,
+            "enabled": false,
             "ip": "192.168.0.50"
         }
     ],

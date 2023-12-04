@@ -40,6 +40,14 @@ class AlambresWebApp:
         if self.process is not None:
             self.process.join()
             self.process = None  
+        if self.camera_manager is not None:
+            self.camera_manager.disconnect()
+            self.camera_manager = None
+        if self.plc_client is not None:
+            self.plc_client.stop_reading()
+            self.plc_client.disconnect_plc()
+            self.plc_client = None
+        print("Devices disconnected")
 
     def load_config(self):
         with open(self.config_path, 'r') as f:
@@ -190,7 +198,7 @@ class AlambresWebApp:
         jpg_images = self.image_manager.generate_images(resp_images)
         jpg_images = self.image_manager.proc_image(jpg_images, result_list)
         img_path = os.path.join(os.path.dirname(__file__), r'lib/img')
-        self.image_manager.save_images(jpg_images, path=img_path)
+        # self.image_manager.save_images(jpg_images, path=img_path)
         self.image_manager.save_image(jpg_images, path=img_path)
         
         with open(img_path + f"/all.jpg", "rb") as f:
