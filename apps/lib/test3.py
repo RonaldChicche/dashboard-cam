@@ -1,46 +1,21 @@
 from snap_client import PLCDataSender
 
-# plc = PLCDataSender()
+plc_client = PLCDataSender()
+plc_client.connect_plc('192.168.0.1')
 
-# # method to connect
-# con = plc.connect_plc(ip='192.168.0.1')
-
-# # test reading
-# # plc.db_read_num = 19
-# # plc.db_read_size = 6
-# # # method to read data
-# # plc.read_plc_data()
-
-# # print(plc.plc_struct)
-
-# test write
-# plc.db_write_num = 20
-
-# plc.cam_struct['STW'] = 1
-# plc.cam_struct['SP_POS'] = 2
-# plc.cam_struct['SP_VEL'] = 3
-# plc.cam_struct['Error'] = 4
-
-# print(plc.cam_struct)
-# plc.send_plc_data()
-
-
-# des = plc.disconnect_plc()
-
-import snap7
-
-plc = snap7.client.Client()
-plc.connect('192.168.0.1', 0, 1)
-
-print(plc.get_connected())
-
+run = True
 try:
-    data = plc.db_read(19, 0, 6)
-    print("DATA: ", data)
+    while run:
+        # Read PLC data
+        plc_data = plc_client._read_plc_data()
+        print(plc_data)
+        states = plc_client.parse_plc_data(plc_data["CTW"])
+        print(states)
 
 except RuntimeError as e:
     print("Error Runtime: ", e)
 
 finally:
-    error = plc.disconnect()
+    run = False
+    error = plc_client.disconnect_plc()
     print(f"Diconnect Error: {error}")

@@ -1,11 +1,20 @@
 import threading
 # from .http_client import HTTPDataSender
 from snap7 import client, util
+import time
 
         
 class PLCDataSender():
 
     cam_states = {
+        "RUNNING"   : False,
+        "PAUSE"     : False,
+        "RESET"     : False,
+        "STOP"      : False,
+        "ErrAlig"   : False,
+        "ErrProc"   : False,
+        "READY"     : False,
+        "READY_CUT" : False,
         "CAM1_CON"  : False,
         "CAM2_CON"  : False,
         "CAM3_CON"  : False,
@@ -13,15 +22,7 @@ class PLCDataSender():
         "CAM1_Err"  : False,
         "CAM2_Err"  : False,
         "CAM3_Err"  : False,
-        "CAM4_Err"  : False,
-        "RUNNING"   : False,
-        "PAUSE"     : False,
-        "RESET"     : False,
-        "STOP"      : False,
-        "ErrAlig"   : False,
-        "ErrProc"   : False,
-        "None"      : False,
-        "None"      : False,
+        "CAM4_Err"  : False,  
     }
 
     cam_struct = {
@@ -32,28 +33,28 @@ class PLCDataSender():
     }
 
     plc_states = {
-        "TRIG"      : False,
+        "None0"     : False,
+        "CHNG_APP"  : False,
         "RESET"     : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
+        "CUT_DONE"  : False,
+        "None3"     : False,
+        "None4"     : False,
+        "None5"     : False,
+        "None6"     : False,
+        "TRIG"      : False,
+        "None8"     : False,
+        "None9"     : False,
         "ErrAlig"   : False,
         "ErrProc"   : False,
-        "None"      : False,
-        "None"      : False,
-        "None"      : False,
+        "None10"    : False,
+        "None11"    : False,
+        "None12"    : False,
     }
 
     plc_struct = {
-        "STW"   : None,
-        "Var_1" : 0,
-        "Var_2" : 0,
+        "CTW"   : None,
+        "PV_POS" : 0,
+        "PROD_TYPE" : 0,
     }
 
     def __init__(self):
@@ -62,12 +63,16 @@ class PLCDataSender():
         self.slot = 1
         self.plc = None
         self.data_control = None
-        self.data_send = None
+        self.data_send = bytearray(14)
         self.db_write_num = 20
         self.db_read_num = 19
-        self.db_read_size = 6
+        self.db_read_size = 8
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._read_plc_data)
+        self.thread_started = False
 
     def __del__(self):
+        self.stop_reading()
         self.disconnect_plc()
 
     def disconnect_plc(self):
@@ -88,20 +93,52 @@ class PLCDataSender():
         return 1
         
 
-    def read_plc_data(self) -> dict:
+    def _read_plc_data(self):
         """ Read data from plc and convert to plc struct
             Returns:
-                dict: plc struct
+                dict: plc_struct
         """
-        self.data_control = self.plc.db_read(self.db_read_num, 0, self.db_read_size)
-        self.plc_struct["STW"] = util.get_word(self.data_control, 0)
-        self.plc_struct["Var_1"] = util.get_int(self.data_control, 2)
-        self.plc_struct["Var_2"] = util.get_int(self.data_control, 4)
-        return self.plc_struct
+        self.thread_started = True
+        while not self._stop_event.is_set():
+            # Inspect if it is connected to the plc
+            if not self.plc.get_connected():
+                self.plc.connect(self.ip, self.rack, self.slot)
+                # Reconnection verification
+                if not self.plc.get_connected():
+                    print("PLC not connected")
+                    time.sleep(1)
+                continue
+            # read data from plc
+            self.data_control = self.plc.db_read(self.db_read_num, 0, self.db_read_size)
+            word = util.get_word(self.data_control, 0)
+            self.plc_struct["CTW"] = bin(word)[2:].zfill(16)        
+            self.plc_struct["PV_POS"] = util.get_real(self.data_control, 2)
+            self.plc_struct["PROD_TYPE"] = util.get_int(self.data_control, 6)
+            # parse plc data states
+            self.parse_plc_data(self.plc_struct["CTW"])
+            # send data to plc
+            self.send_plc_data()
+            
+            time.sleep(0.1)
+
+    def start_reading(self):
+        self._thread.start()
+
+    def stop_reading(self):
+        if self.thread_started:
+            self._stop_event.set()
+            self._thread.join()
+
+    def parse_plc_data(self, plc_word):
+        # turn ctw "00000000" in plc_states dic
+        plc_word = plc_word[::-1]
+        for i, (key, value) in enumerate(self.plc_states.items()):
+            self.plc_states[key] = bool(int(plc_word[i]))
+        return self.plc_states
 
     def send_plc_data(self) -> None:
         """ Convert cam states to cam struct and cam struct to <<data send>>"""
-        self.data_send = bytearray()
+        self.data_send = bytearray(14)
         # Cam states to cam struct['STW']
         self.cam_struct["STW"] = 0
         for i, (key, value) in enumerate(self.cam_states.items()):
@@ -109,9 +146,9 @@ class PLCDataSender():
                 self.cam_struct["STW"] |= 1 << i
         # Cam struct to data send
         util.set_word(self.data_send, 0, self.cam_struct["STW"])
-        util.set_int(self.data_send, 2, self.cam_struct["SP_POS"])
-        util.set_int(self.data_send, 4, self.cam_struct["SP_VEL"])
-        util.set_int(self.data_send, 6, self.cam_struct["Error"])
+        util.set_real(self.data_send, 2, self.cam_struct["SP_POS"])
+        util.set_real(self.data_send, 6, self.cam_struct["SP_VEL"])
+        util.set_real(self.data_send, 10, self.cam_struct["Error"])
         # write to PLC
         self.plc.db_write(self.db_write_num, 0, self.data_send)        
             

@@ -1,0 +1,12 @@
+{
+    "app00": {
+        "description": "ajuste de merma para siguiente malla",
+        "compensation": -42,
+        "cameras": 1
+    },
+    "app01": {
+        "description": "malla tipo 1",
+        "compensation": 120,    
+        "cameras": 1
+    }
+}

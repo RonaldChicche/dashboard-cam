@@ -28,23 +28,26 @@ document.addEventListener("DOMContentLoaded", function() {
                 body: JSON.stringify({ip_plc1, ip_cam1, ip_cam2, ip_cam3, ip_cam4})
             })
             .then(response => response.json())
-            .then(data => {
-                // receive response = {'states': cam_con[0][0], 'init': cam_ini[0][0], 'settings': cam_set[0], 'plc_state': plc_con[0]}
-                // cam_con = [[0, 0, 0, 0]]
-                // cam_ini = [[0, 0, 0, 0]]
-                // cam_set = [[0, 0, 0, 0]]
-                // plc_con = [0]
-                
+            .then(data => {                
                 // asing the values to the circles : states
                 var cam_con = data.states;
                 var cam_ini = data.init;
                 var cam_set = data.settings;
                 var plc_con = data.plc_state;
+                
+                // change the color of the circles :  plc1-c1
+                var circle = document.getElementById('plc1-c1');
+                if (plc_con == 1) {
+                    circle.style.backgroundColor = "green";
+                }
+                else {
+                    circle.style.backgroundColor = "red";
+                }
 
                 // change the color of the circles :  cam1-c1, cam2-c1, cam3-c1, cam4-c1
                 for (var i = 0; i < 4; i++) {
                     var circle = document.getElementById(`cam${i+1}-c1`);
-                    if (cam_con[0][i] == 0) {
+                    if (cam_con[i][0] == 0) {
                         circle.style.backgroundColor = "green";
                     }
                     else {
@@ -55,7 +58,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 // change the color of the circles :  cam1-c2, cam2-c2, cam3-c2, cam4-c2   
                 for (var i = 0; i < 4; i++) {
                     var circle = document.getElementById(`cam${i+1}-c2`);
-                    if (cam_ini[0][i] == 0) {
+                    if (cam_ini[i][0] == 0) {
                         circle.style.backgroundColor = "green";
                     }
                     else {
@@ -66,7 +69,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 // change the color of the circles :  cam1-c3, cam2-c3, cam3-c3, cam4-c3
                 for (var i = 0; i < 4; i++) {
                     var circle = document.getElementById(`cam${i+1}-c3`);
-                    if (cam_set[0][i] == 0) {
+                    if (cam_set[i][0] == 0) {
                         circle.style.backgroundColor = "green";
                     }
                     else {
@@ -86,6 +89,14 @@ document.addEventListener("DOMContentLoaded", function() {
             .then(response => {
                 if (response.ok) {
                     console.log('Disconnected successfully');
+                    // put all the circles without color
+                    for (var i = 0; i < 4; i++) {
+                        for (var j = 0; i < 11, j < 4; j++) {
+                            var circle = document.getElementById(`cam${i+1}-c${j+1}`);
+                            circle.style.backgroundColor = "transparent";
+                        }
+                    }
+
                 } else {
                     console.error('Disconnection failed');
                 }

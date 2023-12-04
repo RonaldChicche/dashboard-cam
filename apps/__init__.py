@@ -9,59 +9,41 @@ from flask import Flask
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from importlib import import_module
+from flask_socketio import SocketIO
 from flask import request, jsonify, render_template_string
 
 from .lib import XmlRpcProxyManager, PLCDataSender, ImageClient
-from .ptz_app import *
 import base64
 
 
 db = SQLAlchemy()
 login_manager = LoginManager()
-ptz_application = PTZWebApp()
+
+
+# Application
+plc_client = PLCDataSender()
+camera_manager = XmlRpcProxyManager(plc_client)
+image_manager = ImageClient()
 
 def register_extensions(app):
     db.init_app(app)
     login_manager.init_app(app)
+
+    # Applications
 
 def register_blueprints(app):
     for module_name in ('authentication', 'home'):
         module = import_module('apps.{}.routes'.format(module_name))
         app.register_blueprint(module.blueprint)
 
-def configure_database(app):
-
-    @app.before_first_request
-    def initialize_database():
-        try:
-            db.create_all()
-        except Exception as e:
-
-            print('> Error: DBMS Exception: ' + str(e) )
-
-            # fallback to SQLite
-            basedir = os.path.abspath(os.path.dirname(__file__))
-            app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'db.sqlite3')
-
-            print('> Fallback to SQLite ')
-            db.create_all()
-
-    @app.teardown_request
-    def shutdown_session(exception=None):
-        db.session.remove()
-
-# Application
-camera_manager = XmlRpcProxyManager()
-plc_client = PLCDataSender()
-image_manager = ImageClient()
 # method to connect
-def connect_devices(app):
+def manual_devices(app):
     @app.route('/connect', methods=['POST'])
     def connect():
         data = request.get_json()
         # print(data)
         ip_plc = data['ip_plc1']
-        ip_cam = [data['ip_cam1'], data['ip_cam2'], data['ip_cam3'], data['ip_cam4']]
+        ip_cam = [data['ip_cam1']]
 
         # Connections
         t = 3
@@ -71,6 +53,10 @@ def connect_devices(app):
             cam_ini = camera_manager.init_config()
             cam_set = camera_manager.set_config(0)
             plc_con = plc_client.connect_plc(ip=ip_plc)
+
+            # Run threads
+            camera_manager.start_reading()
+            plc_client.start_reading()
         except RuntimeError as e:
             print("Error: ", e)
             if t > 0:
@@ -86,32 +72,36 @@ def connect_devices(app):
         
         # return jsonify({'circle1': cam_con[0][0], 'circle2': cam_ini[0][0], 'circle3': cam_set[0], 'circle4': plc_con[0]})
         # return jsonify({'circle1': 0, 'circle2': 0, 'circle3': 1, 'circle4': 0})
-        response = {'states': cam_con[0][0], 'init': cam_ini[0][0], 'settings': cam_set[0], 'plc_state': plc_con[0]}
+        print("Cam_con: ", cam_con[0])
+        print("Cam_ini: ", cam_ini[0])
+        print("Cam_set: ", cam_set[0])
+        print("PLC_con: ", plc_con)
+        response = {'states': cam_con, 'init': cam_ini, 'settings': cam_set, 'plc_state': plc_con}
         # convert to json
         return jsonify(response)
     
-# method to disconnect
-def disconnect_devices(app):
+    # method to disconnect
     @app.route('/disconnect', methods=['POST'])
     def disconnect():
         # global camera_manager
         # global plc_client
         # Connections
         print("Disconnecting devices...")
+        plc_client.stop_reading()
+        camera_manager.stop_reading()
         camera_manager.disconnect()
         plc_client.disconnect_plc()
 
         return {'status': 'ok'}
     
-# execute detection
-def execute_detection(app):
+    # execute detection
     @app.route('/execute_detection', methods=['POST'])
     def execute_detection():
         # Execute detection
         print("Executing detection...")
         results = camera_manager.execute_detection(tries=2)
         # print_detection_result(results)
-        diferences = [240 - res[1]["y"] for res in results if res[0] == 0]
+        diferences = [res[1]["y"] for res in results if res[0] == 0]
         error = sum(diferences)/len(diferences) if len(diferences) > 0 else 0
         set_point = 240 + error
         velocity = 15 # corregir
@@ -119,14 +109,16 @@ def execute_detection(app):
         # get images
         resp_images = camera_manager.get_images()
         # header_path = r"C:/Users/ronal/Documents/Projects/Prodac-ProjMallas/flask-argon-dashboard/apps/lib/bmp_header.bin"
-        header_path = os.path.join(os.path.dirname(__file__), r'lib\bmp_header.bin')
+        header_path = os.path.join(os.path.dirname(__file__), r'lib/bmp_header.bin')
         jpg_images = image_manager.generate_images(resp_images, header_path=header_path)
         # process imagess
         jpg_images = image_manager.proc_image(jpg_images, results)
         # save images 
-        img_path = r"C:/Users/ronal/Documents/Projects/Prodac-ProjMallas/flask-argon-dashboard/apps/lib/img"
+        # img_path = r"C:/Users/ronal/Documents/Projects/Prodac-ProjMallas/flask-argon-dashboard/apps/lib/img"
+        img_path = os.path.join(os.path.dirname(__file__), r'lib/img')
         image_manager.save_images(jpg_images, path=img_path)
         response = {'set_point': set_point, 'velocity': velocity, 'error': error}
+        print(response)
         
         # read images from img_path
         jpg_images = []
@@ -142,14 +134,9 @@ def execute_detection(app):
 def create_app(config):
     app = Flask(__name__)
     app.config.from_object(config)
+    socketio = SocketIO(app)
     register_extensions(app)
     register_blueprints(app)
-    configure_database(app)
     # Application
-    # init_application(app)
-    connect_devices(app)
-    disconnect_devices(app)
-    execute_detection(app)
-    # PTZ app functions
-    ptz_application.start(app)
-    return app
+    manual_devices(app)
+    return app, socketio

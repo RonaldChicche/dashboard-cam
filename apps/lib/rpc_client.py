@@ -1,7 +1,9 @@
 import xmlrpc.client
 import concurrent.futures
+import threading
 import socket
 import time
+import json
 import os
 
 
@@ -214,29 +216,21 @@ class XmlRpcCameraProxy:
 
 class XmlRpcProxyManager:
 
-    cam_states = {
-        "CAM1_CON"  : False,
-        "CAM2_CON"  : False,
-        "CAM3_CON"  : False,
-        "CAM4_CON"  : False,
-        "CAM1_Err"  : False,
-        "CAM2_Err"  : False,
-        "CAM3_Err"  : False,
-        "CAM4_Err"  : False,
-        "RUNNING"   : False,
-        "PAUSE"     : False,
-        "RESET"     : False,
-        "STOP"      : False,
-        "ErrAlig"   : False,
-        "ErrProc"   : False,
-        "None"      : False,
-        "None"      : False,
-    }
-
-    def __init__(self):
+    def __init__(self, plc_client):
         self.platform = "3.5.0061"
         self.port = 8080
         self.proxies = []
+        self.trig_lock = False
+        self.plc_states = plc_client.plc_states
+        self.plc_struct = plc_client.plc_struct
+        self.cam_states = plc_client.cam_states
+        self.cam_struct = plc_client.cam_struct
+        # Load config
+        self.config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        self.config = self.load_config()
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._check_trigger)
+        self.thread_started = False
 
     def __getitem__(self, index):
         """
@@ -259,6 +253,92 @@ class XmlRpcProxyManager:
             print(proxy)
         """
         return iter(self.proxies)
+
+    def load_config(self):
+        with open(self.config_path, 'r') as f:
+            config = json.load(f)
+        return config
+
+    def _check_trigger(self):
+        self.thread_started = True
+        print("CAM MANAGER STARTED")
+        self.trig_lock = False
+        self.cam_states["READY"] = True 
+        while not self._stop_event.is_set():
+            # print(self.plc_states["TRIG"]) 
+            # print(self.plc_struct["PV_POS"])
+            # Logic to activate once the trig_lock when the trigger is activated otherwise deactivate
+            
+            self.trig_lock = not (self.plc_states["TRIG"] ^ self.trig_lock)
+
+            if self.plc_states["TRIG"] and not self.trig_lock:
+                # Check cameras states
+                
+                beat = self.heart_beat()
+                print(beat)
+                for b in beat:
+                    self.cam_states["CAM1_CON"] = b[0]
+                    self.cam_states["CAM2_CON"] = b[0]
+                    self.cam_states["CAM3_CON"] = b[0]
+                    self.cam_states["CAM4_CON"] = b[0]
+                
+                # Execute detection
+                results = self.execute_detection()
+                images = self.get_images()
+
+                # Calculate error
+                # sp_app = 90.0
+                # diferences = [sp_app - res[1]["y"] for res in results if res[0] == 0]
+                # error = sum(diferences)/len(diferences) if len(diferences) > 0 else 0
+                # set_point = sp_app + error
+                # # scale
+                # set_point = set_point * 3 / 10
+                # error = error * 3 /10
+                
+                # Select app
+                # app = self.plc_struct["PROD_TYPE"]
+                app = 1
+                app = f"app{app:02d}"
+                compensation = self.config[app]["compensation"]
+                differences = []
+                for res in results:
+                    if res[0] == 0:
+                        if res[1]["y"] < compensation:
+                            diff = compensation - res[1]["y"] - 37
+                            print(res[1]["y"], diff)
+                        elif res[1]["y"] >= compensation:
+                            diff = compensation - res[1]["y"] 
+                        # pix to mm
+                        diff = diff * 0.19
+                        differences.append(diff)
+                print(f"Differences: {differences}, Com: {compensation}")
+                error = sum(differences)/len(differences) if len(differences) > 0 else 0
+                set_point = self.plc_struct["PV_POS"] * 10 - round(error)
+
+
+                # Send to PLC
+                self.cam_struct["SP_POS"] = set_point/10
+                self.cam_struct["Error"] = error
+                # print(results)
+                self.cam_states["READY_CUT"] = True
+                print(self.cam_struct)
+
+                self.trig_lock = True
+
+            if self.plc_states["TRIG"] == False:
+                # self.cam_states["READY"] = False
+                self.cam_states["READY_CUT"] = False
+                self.trig_lock = False
+            
+            time.sleep(0.1)
+
+    def start_reading(self):
+        self._thread.start()
+
+    def stop_reading(self):
+        if self.thread_started:
+            self._stop_event.set()
+            self._thread.join()
     
     def connect(self, ip_list:list):
         self.ip_list = ip_list
