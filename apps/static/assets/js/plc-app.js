@@ -107,18 +107,28 @@ document.addEventListener("DOMContentLoaded", function() {
 
     [executeBtn, executeBtnMobile].forEach(btn => {
         btn.addEventListener('click', function() {
+            const camAppElement = document.getElementById('cam-app');
+            const camAppState = camAppElement ? camAppElement.value : null;
+            // print what is sent to the terminal
+            console.log(camAppState);
             fetch('/execute_detection', {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    camAppState: camAppState
+                })
             })
             .then(response => response.json())
             .then(data => {
-                const imageSrc = `data:image/jpeg;base64,${data.image}`;
+                const imageSrc = `data:image/jpeg;base64,${data.imagen}`;
                 const carouselItem = document.querySelector('.carousel-item');
                 carouselItem.style.backgroundImage = `url(${imageSrc})`;
                 console.log('Image updated');
                 console.log(`Status: ${data.status}`);
-                console.log(`Response: ${JSON.stringify(data.response)}`);
-                console.log(`Results: ${JSON.stringify(data.results)}`);
+                console.log(`Error: ${data.error}`);
+                console.log(`New Point: ${data.new_point}`);
             })
             .catch(error => console.error(error));
         });

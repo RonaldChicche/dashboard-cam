@@ -4,58 +4,98 @@
     },
 
     "scale": {
-        "pix2mm": 0.19
+        "pix2mm": 2
     },
 
     "cameras": [
         {
-            "name": "cam01",
+            "name": "cam00",
             "enabled": true,
             "ip": "192.168.0.47"
         },
         {
-            "name": "cam02",
+            "name": "cam01",
             "enabled": true,
             "ip": "192.168.0.48"
         },
         {
-            "name": "cam03",
-            "enabled": true,
+            "name": "cam02",
+            "enabled": false,
             "ip": "192.168.0.49"
         },  
         {
-            "name": "cam04",
+            "name": "cam03",
             "enabled": true,
             "ip": "192.168.0.50"
         }
     ],
 
-    "app99": {
-        "description": "ajuste para corte de mallas",
-        "set-point": -42
-    },    
+      
     "app00": {
         "description": "ajuste test de prueba",
-        "set-point": -42,
-        "nudo": 36.84,
-        "cam": 4
+        "nudo": 80,
+        "cameras": [
+            {
+                "name": "cam00",
+                "set-point": 350,
+                "set-merma": 220
+            }
+        ] 
     },
+    
     "app01": {
-        "description": "ajuste para corte de mallas de tipo 1 de 1m de ancho",
-        "set-point": 120,    
+        "description": "ajuste para corte de mallas de tipo 1 de 1m de ancho",    
         "nudo": 36.84,
-        "cam": 1
+        "cameras": [
+            {
+                "name": "cam00",
+                "set-point": -42,
+                "set-merma": -23
+            },
+            {
+                "name": "cam02",
+                "set-point": -56,
+                "set-merma": 3
+            }
+        ]
     },
+
     "app02": {
         "description": "ajuste para corte de mallas de tipo 1 de 2m de ancho",
-        "set-point": 70,    
         "nudo": 36.84,
-        "cam": 2
+        "cameras": [
+            {
+                "name": "cam00",
+                "set-point": 70,
+                "set-merma": 23
+            },
+            {
+                "name": "cam01",
+                "set-point": 23,
+                "set-merma": 43
+            }
+        ]
     },
+
     "app03": {
-        "description": "ajuste para corte de mallas de tipo 2 de 2m de ancho",
-        "set-point": -10,    
+        "description": "ajuste para corte de mallas de tipo 2 de 2m de ancho",  
         "nudo": 24.70,
-        "cam": 2
+        "cameras": [
+            {
+                "name": "cam01",
+                "set-point": -42,
+                "set-merma": -23
+            },
+            {
+                "name": "cam02",
+                "set-point": -56,
+                "set-merma": -23
+            },
+            {
+                "name": "cam03",
+                "set-point": -56,
+                "set-merma": -23
+            }
+        ]
     }
 }

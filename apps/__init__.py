@@ -139,5 +139,5 @@ def create_app(config):
     register_blueprints(app)
     # Application
     # manual_devices(app)
-    # web_app.start_thread()
+    web_app.start_thread()
     return app

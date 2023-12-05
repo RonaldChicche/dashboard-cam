@@ -45,35 +45,26 @@ class XmlRpcCameraProxy:
             raise Exception(error_msg)
 
     def connect(self, platform):
-        print(f"Connecting to {self.ip}...")
+        """ Input: platform, automatic
+        Returns: [connection, set_cfg, {'model', 'ip', 'mac'}]"""
+
         self.profile = {}
         try:
             resp = self.proxy.xmlConnect(self.user_ip, platform)
             if resp[0] == 0:
-                self.profile['id'] = resp[1]
-                self.profile['session'] = resp[2]
                 self.profile['model'] = resp[3]
-                self.profile['firmware_version'] = resp[4]
                 network_params = self.get_network_parameters()
                 self.profile['ip'] = network_params['ip']
-                self.profile['subnet'] = network_params['subnet']
-                self.profile['gateway'] = network_params['gateway']
-                self.profile['http_port'] = network_params['http_port']
-                self.profile['udp_port'] = network_params['udp_port']
                 self.profile['mac'] = network_params['mac']
-                return [0, self.profile]
+                self.init_config()
+                set_cfg = self.set_config(0)
+                return [0, set_cfg, self.profile]
             else:
                 print(f"Error connecting to {self.ip}: {resp[0]}")
                 return [1]
         except socket.timeout:
             print(f"Timeout connecting to {self.ip}")
             return [1]
-        
-    # thread to keep alive the connection
-    def keep_alive(self):
-        while True:
-            self.proxy.xmlHeartbeat()
-            time.sleep(1)
 
     def get_compaitble_versions(self):
         resp = self.proxy.xmlGetCompatibleCPVersions()
@@ -312,18 +303,22 @@ class XmlRpcProxyManager:
             results = [future.result() for future in futures]
         return results
 
-    def execute_detection(self, cam, tries=2):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=cam) as executor:
-            # Usar solo los primeros 'cam' proxies
-            selected_proxies = self.proxies[:cam]
+    def execute_detection(self, cam_list, tries=2):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(cam_list)) as executor:
+            # cam_list es una lista de indeces de las camaras que se van a usar
+            selected_proxies = [self.proxies[cam] for cam in cam_list]
             futures = [executor.submit(proxy.execute_detection) for proxy in selected_proxies]
-            results = [future.result() for future in futures]
+            # put the results in a list in the same index as the cam_list
+            results = [None, None, None, None]
+            for i, future in enumerate(futures):
+                results[cam_list[i]] = future.result()
+        
         return results
     
-    def get_images(self, cam):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=cam) as executor:
+    def get_images(self, cam_list):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(cam_list)) as executor:
             # Usar solo los primeros 'cam' proxies
-            selected_proxies = self.proxies[:cam]
+            selected_proxies = [self.proxies[cam] for cam in cam_list]
             futures = [executor.submit(proxy.get_images) for proxy in selected_proxies]
             results = [future.result() for future in futures]
         return results

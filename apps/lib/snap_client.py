@@ -34,7 +34,7 @@ class PLCDataSender():
 
     plc_states = {
         "None0"     : False,
-        "APP"       : False,
+        "None1"     : False,
         "RESET"     : False,
         "CUT_DONE"  : False,
         "None3"     : False,
@@ -42,7 +42,7 @@ class PLCDataSender():
         "None5"     : False,
         "None6"     : False,
         "TRIG"      : False,
-        "None8"     : False,
+        "TRIG_CUT"  : False,
         "None9"     : False,
         "ErrAlig"   : False,
         "ErrProc"   : False,
@@ -53,7 +53,7 @@ class PLCDataSender():
 
     plc_struct = {
         "CTW"   : None,
-        "PV_POS" : 0,
+        "PV_POS" :    0,
         "PROD_TYPE" : 0,
     }
 
