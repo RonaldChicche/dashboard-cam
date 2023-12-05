@@ -196,6 +196,7 @@ class XmlRpcCameraProxy:
         self.test_config = self.proxy.xmlTestConfig(0)
         result = {}
         result['error'] = 1
+        result['y'] = 0
         # print(result)
         return [1, result]
     

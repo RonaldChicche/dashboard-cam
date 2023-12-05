@@ -3,6 +3,8 @@ import time
 import json
 import threading
 import base64
+import numpy as np
+from scipy.stats import linregress
 from flask import request
 from flask_socketio import SocketIO, emit
 from .lib import XmlRpcProxyManager, PLCDataSender, ImageClient
@@ -98,35 +100,44 @@ class AlambresWebApp:
         print(f"-> PLC connected on {self.config['plc']['ip']}")
         return 0
     
-    def method_test(self, app):
-        # Process app
-        app = f"app{app:02d}"
-
-        # get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enamled
-        cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
-        
-        cameras = self.config[app]['cameras']
-        # Process indexes and differences
-        for index in cam_list:
-            name = f"cam{index:02d}"
-            # get the camera dictionarie from the selected app by name
-            cam = [cam for cam in cameras if cam['name'] == name][0]
-
-            # Verify plc cut order
-            if self.plc_client.plc_states['TRIG_CUT'] == True:
-                set_point = cam['set-merma']
-            else:
-                set_point = cam['set-point']
-            print("set_point:", set_point)
-
-        
-        print(cam_list)
-
-    def eliminar_outliers(self, lista, num_desviaciones=2):
+    def detectar_outliers(self, lista, num_desviaciones=1):
         media = sum(lista) / len(lista)
         desviacion_estandar = (sum((x - media) ** 2 for x in lista) / len(lista)) ** 0.5
-        return [x for x in lista if abs(x - media) <= num_desviaciones * desviacion_estandar]
+        outliers = [x for x in lista if abs(x - media) > num_desviaciones * desviacion_estandar]
+        return outliers
 
+    def calcular_pendiente(self, lista_ajustada, list_index):
+        # list of pos from cameras from config
+        # lista_pos = [self.config['cameras'][i]['pos'] for i in list_index]
+
+        x = np.arange(len(lista_ajustada))
+        # x = np.array(lista_pos)
+        y = np.array(lista_ajustada)
+        print(f"lista_pos: {list_index}")
+        print(f"x: {x}, y: {y}")
+        slope, intercept, r_value, p_value, std_err = linregress(x, y)
+        return slope
+
+    def ajustar_outliers(self, lista, compensacion, num_desviaciones=1):
+        outliers = self.detectar_outliers(lista, num_desviaciones)
+        lista_sin_outliers = [x for x in lista if x not in outliers]
+        mediana = np.median(lista_sin_outliers)
+
+        # Ajustar outliers y elegir el valor más cercano a la mediana
+        outliers_ajustados = []
+        for outlier in outliers:
+            ajuste_suma = outlier + compensacion
+            ajuste_resta = outlier - compensacion
+            ajuste_cercano = min([ajuste_suma, ajuste_resta, outlier], key=lambda x: abs(x - mediana))
+            outliers_ajustados.append(ajuste_cercano)
+
+        # Reemplazar outliers en la lista original
+        lista_ajustada = lista.copy()
+        for outlier, ajustado in zip(outliers, outliers_ajustados):
+            idx = lista_ajustada.index(outlier)
+            lista_ajustada[idx] = ajustado
+        
+        return lista_ajustada
     
     def detection_execution(self, app):
         """Return: {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}}"""
@@ -137,57 +148,88 @@ class AlambresWebApp:
         
         # Process app
         app = f"app{app:02d}"
+        compensator = self.config[app]['nudo']/self.config['scale']['pix2mm']
 
         # Get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
         cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
+        disabled_list = [index for index, cam in enumerate(self.config[app]['cameras']) if not self.config['cameras'][int(cam["name"][3:])]['enabled']]
         
         # Execute detection
         result_list = self.camera_manager.execute_detection(cam_list)
-        print(f"Detection executed: {result_list}")
+        
+        # make a list of y coordinates from the result_list
+        y_list = [result[1]['y'] for result in result_list if result is not None and result[0] == 0]
+        print(f"y_list: {y_list}")
+        # Detect outliers
+        outliers = self.ajustar_outliers(y_list, compensator)
+        print(f"outliers: {outliers}")
+
+        # Verify plc cut order
+        merma = self.plc_client.plc_states['TRIG_CUT']
+        if merma == True:
+            print("\t-> Merma ON")
+            set_key = 'set-merma'
+        else:
+            print("\t-> Merma OFF")
+            set_key = 'set-point'     
+        # Promedio de setpoints
+        prom_set_point = sum([cam[set_key] for cam in self.config[app]['cameras']])/len(self.config[app]['cameras'])         
 
         # Process indexes and differences
         cameras = self.config[app]['cameras']
+        compensar = True if sum(outliers)/len(outliers) < prom_set_point else False
+        # colocar None en la posicion de las camaras deshabilitadas en outliers
+        for i, val in enumerate(result_list):
+            if val is None:
+                outliers.insert(i, None)
+                continue
+            if val[0] != 0:
+                outliers.insert(i, None)  
+        print(f"outliers new: {outliers}")
+
         differences = []
+        diff_ind = []
+        print(cam_list)
         for index in cam_list:
             print(f"\t-> Camera {index}:", end=" ")
             name = f"cam{index:02d}"
             # Get the camera dictionarie from the selected app by name
             cam = [cam for cam in cameras if cam['name'] == name][0]
 
-            # Verify plc cut order
-            result_list[index][1]['merma'] = self.plc_client.plc_states['TRIG_CUT']
-            if self.plc_client.plc_states['TRIG_CUT'] == True:
-                print("\t-> Merma ON")
-                set_point = cam['set-merma']
-            else:
-                print("\t-> Merma OFF")
-                set_point = cam['set-point']                
+            # Set point
+            set_point = cam[set_key] 
+            result_list[index][1]['merma'] = merma
             result_list[index][1]['set_point'] = set_point
             
             # Get the result from the result_list by index
-            result = result_list[index] 
-            if result[0] == 0:
-                if abs(result[1]['y'] - set_point) <= 25:
-                    diff = 0
-                    differences.append(diff)
-                    continue
-                 
-                if result[1]['y'] > set_point:
-                    diff = result[1]['y'] - set_point
-                    print(f"\t\t-> Operation: {diff} = {result[1]['y']} - {set_point}")
-                elif result[1]['y'] < set_point:
-                    diff =  result[1]['y'] + self.config[app]['nudo']/self.config['scale']['pix2mm'] - set_point
-                    print(f"\t\t-> Operation: {diff} = {result[1]['y']} + {self.config[app]['nudo']/self.config['scale']['pix2mm']} - {set_point}")    
-                # Differences
-                result_list[index][1]['diff'] = diff
-                differences.append(diff)
-        
-        # Align error --------------------------------------------------
-        
+            result = outliers[index]   
+            if result is None:
+                print(f"None")
+                continue
 
-        # Process differences
-        differences = self.eliminar_outliers(differences)
-        print(f"\t-> Differences out: {differences}")
+            if abs(result - set_point) <= 40:
+                diff = result - set_point
+                print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
+                differences.append(diff)
+                diff_ind.append(index)
+                continue
+
+            if compensar:
+                diff = result - set_point + compensator
+                print(f"\t\t-> Operation: {diff} = {result} - {set_point} + {compensator}")
+            else:
+                diff = result - set_point
+                print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
+            
+            differences.append(diff)
+            diff_ind.append(index)
+        
+        # Align
+        align = self.calcular_pendiente(differences, diff_ind)
+        if abs(align) > self.config[app]['align']:
+            self.plc_client.cam_states["ErrAlig"] = True
+        print(f"align: {align}")
+        print(f"Detection executed: {result_list}")
         # Calculate error   
         error = sum(differences)/len(differences) if len(differences) > 0 else 0
         error_mm = error * self.config['scale']['pix2mm']
@@ -211,7 +253,7 @@ class AlambresWebApp:
         
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True
-        return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image, 'results_cam': result_list}
+        return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image, 'align': align, 'results_cam': result_list}
 
     def main(self):        
         # Release threads
@@ -221,17 +263,16 @@ class AlambresWebApp:
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True
         while self.run:
-            # make a beat for cameras 
-            # if time.time() - self.timer > self.beat_time:
-                # self.timer = time.time()
-                # resp = self.camera_manager.heart_beat()
-                # print("Heart beat:", self.plc_client.cam_states) 
-
             # check trigger
             if self.plc_client.plc_states["TRIG"] == False:
                 self.prev_state = False
                 self.plc_client.cam_states['READY_CUT'] = False
-
+                self.plc_client.cam_states["ErrAlig"] = False
+                self.plc_client.cam_states["ErrProc"] = False
+                self.plc_client.cam_states["Cam1_Err"] = False
+                self.plc_client.cam_states["Cam2_Err"] = False
+                self.plc_client.cam_states["Cam3_Err"] = False
+                self.plc_client.cam_states["Cam4_Err"] = False
 
             # Excetute detection trigger
             if self.plc_client.plc_states["TRIG"] ^ self.prev_state:                
@@ -289,7 +330,7 @@ class AlambresWebApp:
             resp = self.detection_execution(camAppState)
             print(f"Detection executed")
 
-            return {'status': 'ok', 'imagen': resp['imagen'], 'error': resp['error'], 'new_point': resp['new_point'], 'results_cam': resp['results_cam']} 
+            return {'status': 'ok', 'imagen': resp['imagen'], 'error': resp['error'], 'new_point': resp['new_point'], 'align': resp['align'], 'results_cam': resp['results_cam']} 
         
         # Socketio events ----------------------------------------------
         # @socketio.on('connect')
