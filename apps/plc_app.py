@@ -118,7 +118,7 @@ class AlambresWebApp:
         slope, intercept, r_value, p_value, std_err = linregress(x, y)
         return slope
 
-    def ajustar_outliers(self, lista, compensacion, num_desviaciones=1):
+    def ajustar_outliers(self, lista, compensacion, set_point, num_desviaciones=1):
         outliers = self.detectar_outliers(lista, num_desviaciones)
         lista_sin_outliers = [x for x in lista if x not in outliers]
         mediana = np.median(lista_sin_outliers)
@@ -128,7 +128,7 @@ class AlambresWebApp:
         for outlier in outliers:
             ajuste_suma = outlier + compensacion
             ajuste_resta = outlier - compensacion
-            ajuste_cercano = min([ajuste_suma, ajuste_resta, outlier], key=lambda x: abs(x - mediana))
+            ajuste_cercano = min([ajuste_suma, ajuste_resta, outlier], key=lambda x: abs(x - set_point))
             outliers_ajustados.append(ajuste_cercano)
 
         # Reemplazar outliers en la lista original
@@ -143,8 +143,6 @@ class AlambresWebApp:
         """Return: {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}}"""
         # Execute detection
         print("Executing detection...")
-        self.plc_client.cam_states['RUNNING'] = True
-        self.plc_client.cam_states['READY'] = False
         
         # Process app
         app = f"app{app:02d}"
@@ -156,13 +154,6 @@ class AlambresWebApp:
         
         # Execute detection
         result_list = self.camera_manager.execute_detection(cam_list)
-        
-        # make a list of y coordinates from the result_list
-        y_list = [result[1]['y'] for result in result_list if result is not None and result[0] == 0]
-        print(f"y_list: {y_list}")
-        # Detect outliers
-        outliers = self.ajustar_outliers(y_list, compensator)
-        print(f"outliers: {outliers}")
 
         # Verify plc cut order
         merma = self.plc_client.plc_states['TRIG_CUT']
@@ -174,6 +165,13 @@ class AlambresWebApp:
             set_key = 'set-point'     
         # Promedio de setpoints
         prom_set_point = sum([cam[set_key] for cam in self.config[app]['cameras']])/len(self.config[app]['cameras'])         
+
+        # make a list of y coordinates from the result_list
+        y_list = [result[1]['y'] for result in result_list if result is not None and result[0] == 0]
+        print(f"y_list: {y_list}")
+        # Detect outliers
+        outliers = self.ajustar_outliers(y_list, compensator, prom_set_point)
+        print(f"outliers: {outliers}")
 
         # Process indexes and differences
         cameras = self.config[app]['cameras']
@@ -266,6 +264,8 @@ class AlambresWebApp:
             # check trigger
             if self.plc_client.plc_states["TRIG"] == False:
                 self.prev_state = False
+                self.plc_client.cam_states['RUNNING'] = False
+                self.plc_client.cam_states['READY'] = True
                 self.plc_client.cam_states['READY_CUT'] = False
                 self.plc_client.cam_states["ErrAlig"] = False
                 self.plc_client.cam_states["ErrProc"] = False
@@ -275,10 +275,13 @@ class AlambresWebApp:
                 self.plc_client.cam_states["Cam4_Err"] = False
 
             # Excetute detection trigger
-            if self.plc_client.plc_states["TRIG"] ^ self.prev_state:                
+            if self.plc_client.plc_states["TRIG"] ^ self.prev_state:   
+                
+                self.plc_client.cam_states['RUNNING'] = True
+                self.plc_client.cam_states['READY'] = False             
                 # Execute detection
-                # resp = self.detection_execution(self.plc_client.plc_struct['PROD_TYPE']) # returns a dictionarie
-                resp = self.detection_execution(4) # returns a dictionarie
+                resp = self.detection_execution(self.plc_client.plc_struct['PROD_TYPE']) # returns a dictionarie
+                # resp = self.detection_execution(5) # returns a dictionarie
                 # Send to plc
                 self.plc_client.cam_struct["SP_POS"] = resp['new_point']
                 self.plc_client.cam_struct["SP_VEL"] = 15

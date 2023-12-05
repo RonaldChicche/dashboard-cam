@@ -41,7 +41,7 @@ if DEBUG:
 if __name__ == "__main__":
     # app.run(host='0.0.0.0', port=5000, use_reloader=False)
     try:
-        socketio.run(app, host="0.0.0.0", port=5000, log_output=True)
+        socketio.run(app, host="0.0.0.0", port=5000, log_output=True, allow_unsafe_werkzeug=True)    
     except KeyboardInterrupt:
         print("Keyboard interrupt")
         exit()
