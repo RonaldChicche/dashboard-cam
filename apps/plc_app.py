@@ -146,24 +146,28 @@ class AlambresWebApp:
         cameras = self.config[app]['cameras']
         differences = []
         for index in cam_list:
+            print(f"\t-> Camera {index}:")
             name = f"cam{index:02d}"
             # get the camera dictionarie from the selected app by name
             cam = [cam for cam in cameras if cam['name'] == name][0]
 
             # Verify plc cut order
             if self.plc_client.plc_states['TRIG_CUT'] == True:
+                print("\t-> Merma ON")
                 set_point = cam['set-merma']
             else:
+                print("\t-> Merma OFF")
                 set_point = cam['set-point']
 
             # get the result from the result_list by index
             result = result_list[index]
+             
             if result[0] == 0:
                 if abs(result[1]['y'] - set_point) <= 20:
                     diff = 0
                     differences.append(diff)
                     continue
-
+                 
                 if result[1]['y'] > set_point:
                     diff = result[1]['y'] - set_point
                     print(f"\t-> Operation: {diff} = {result[1]['y']} - {set_point}")
@@ -171,15 +175,13 @@ class AlambresWebApp:
                     diff =  result[1]['y'] + self.config[app]['nudo']/self.config['scale']['pix2mm'] - set_point
                     print(f"\t-> Operation: {diff} = {result[1]['y']} + {self.config[app]['nudo']/self.config['scale']['pix2mm']} - {set_point}")    
                 # pix to mm
-                # diff = diff * self.config['scale']['pix2mm']
                 differences.append(diff)
-                print(f"\t-> Camera {index}: \n\tdifference: {diff} - setpoint: {set_point} \n\tresult: {result[1]}")  
             
         # process differences
         error = sum(differences)/len(differences) if len(differences) > 0 else 0
-        error_mm = error# * self.config['scale']['pix2mm']
+        error_mm = error * self.config['scale']['pix2mm']
         new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
-        print(f"-> NewPoint: {new_point}, Error: {error_mm} mm")
+        print(f"-> NewPoint: {new_point}, PV_POS: {self.plc_client.plc_struct['PV_POS']}, Error: {error_mm} mm")
         
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True

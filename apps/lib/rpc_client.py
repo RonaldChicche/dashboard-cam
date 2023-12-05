@@ -320,7 +320,9 @@ class XmlRpcProxyManager:
             # Usar solo los primeros 'cam' proxies
             selected_proxies = [self.proxies[cam] for cam in cam_list]
             futures = [executor.submit(proxy.get_images) for proxy in selected_proxies]
-            results = [future.result() for future in futures]
+            results = [None, None, None, None]
+            for i, future in enumerate(futures):
+                results[cam_list[i]] = future.result()
         return results
     
     def heart_beat(self):

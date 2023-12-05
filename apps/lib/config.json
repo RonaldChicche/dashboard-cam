@@ -4,7 +4,7 @@
     },
 
     "scale": {
-        "pix2mm": 2
+        "pix2mm": 0.25
     },
 
     "cameras": [
@@ -33,36 +33,31 @@
       
     "app00": {
         "description": "ajuste test de prueba",
-        "nudo": 80,
+        "nudo": 76,
         "cameras": [
             {
                 "name": "cam00",
-                "set-point": 350,
-                "set-merma": 220
+                "set-point": 360,
+                "set-merma": 245
             }
         ] 
     },
     
     "app01": {
         "description": "ajuste para corte de mallas de tipo 1 de 1m de ancho",    
-        "nudo": 36.84,
+        "nudo": 76,
         "cameras": [
             {
-                "name": "cam00",
-                "set-point": -42,
-                "set-merma": -23
-            },
-            {
-                "name": "cam02",
-                "set-point": -56,
-                "set-merma": 3
+                "name": "cam01",
+                "set-point": 365,
+                "set-merma": 240
             }
         ]
     },
 
     "app02": {
         "description": "ajuste para corte de mallas de tipo 1 de 2m de ancho",
-        "nudo": 36.84,
+        "nudo": 85,
         "cameras": [
             {
                 "name": "cam00",
@@ -83,18 +78,18 @@
         "cameras": [
             {
                 "name": "cam01",
-                "set-point": -42,
-                "set-merma": -23
+                "set-point": 100,
+                "set-merma": 200
             },
             {
                 "name": "cam02",
-                "set-point": -56,
-                "set-merma": -23
+                "set-point": 200,
+                "set-merma": 250
             },
             {
                 "name": "cam03",
-                "set-point": -56,
-                "set-merma": -23
+                "set-point": 240,
+                "set-merma": 230
             }
         ]
     }

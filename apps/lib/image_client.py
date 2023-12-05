@@ -66,21 +66,28 @@ class ImageClient():
     def generate_images(self, img_list, header_path):
         self.img_list = []
         for img in img_list:
+            if img is None: 
+                self.img_list.append(None)
+                continue
             self.img_list.append(self.generate_image(img, header_path))
         return self.img_list
 
     def proc_image(self, img_list, result_list):
         """ Process images with results from camera"""
         print(result_list)
-        img_proc_list = []
-        # get size of images
-        self.img_h, self.img_w = img_list[0].shape   
-        print(img_list[0].shape)
-        # get margin
-        self.mx = self.img_w/2 - 200
-        self.my = self.img_h/2 - 200
+        img_proc_list = []   
+        print(len(img_list))
+        
         # make a bucle to process each image with each result
         for i in range(len(img_list)):
+            if img_list[i] is None:
+                continue
+
+            # get size of images
+            self.img_h, self.img_w = img_list[i].shape
+            # get margin
+            self.mx = self.img_w/2 - 200
+            self.my = self.img_h/2 - 200
             # turn image to rgb 
             img_list[i] = cv2.cvtColor(img_list[i], cv2.COLOR_BGR2RGB)
             img = img_list[i].copy()
@@ -91,8 +98,10 @@ class ImageClient():
                 continue
             obj = Objeto(int(result_list[i][1]['x']), int(self.img_h - result_list[i][1]['y']), int(result_list[i][1]['orientation']))
             # Print analysis on image
-            dx = self.img_w/2 - obj.x
-            dy = self.img_h/2 - obj.y
+            # dx = self.img_w/2 - obj.x
+            # dy = self.img_h/2 - obj.y
+            dx = obj.x 
+            dy = obj.y
             
             # Draw margin lines
             lx_1s = (int(self.img_w/2 - self.mx), self.img_h)
@@ -141,6 +150,8 @@ class ImageClient():
         # order images from the list into matrix
         self.img_matrix = []
         for i in range(4):
+            if img_list[i] is None:
+                continue
             self.img_matrix.append(img_list[i*4:(i+1)*4])
         # concatenate images in the matrix
         self.img_concat = []
