@@ -119,6 +119,11 @@ class AlambresWebApp:
         return slope
 
     def ajustar_outliers(self, lista, compensacion, set_point, num_desviaciones=1):
+        if len(lista) < 3:
+            if len(lista) == 2 and abs(lista[0] - lista[1]) < 0.9 * compensacion:
+                return lista
+            return [min([x + compensacion, x - compensacion, x], key=lambda y: abs(y - set_point)) for x in lista]
+
         outliers = self.detectar_outliers(lista, num_desviaciones)
         lista_sin_outliers = [x for x in lista if x not in outliers]
         mediana = np.median(lista_sin_outliers)
@@ -143,6 +148,7 @@ class AlambresWebApp:
         """Return: {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}}"""
         # Execute detection
         print("Executing detection...")
+        print(f"PLC: {self.plc_client.plc_states}")
         
         # Process app
         app = f"app{app:02d}"
@@ -158,10 +164,10 @@ class AlambresWebApp:
         # Verify plc cut order
         merma = self.plc_client.plc_states['TRIG_CUT']
         if merma == True:
-            print("\t-> Merma ON")
+            print("\t-> Merma ON -------------------------")
             set_key = 'set-merma'
         else:
-            print("\t-> Merma OFF")
+            print("\t-> Merma OFF -------------------------")
             set_key = 'set-point'     
         # Promedio de setpoints
         prom_set_point = sum([cam[set_key] for cam in self.config[app]['cameras']])/len(self.config[app]['cameras'])         
@@ -175,6 +181,7 @@ class AlambresWebApp:
 
         # Process indexes and differences
         cameras = self.config[app]['cameras']
+        #
         compensar = True if sum(outliers)/len(outliers) < prom_set_point else False
         # colocar None en la posicion de las camaras deshabilitadas en outliers
         for i, val in enumerate(result_list):
@@ -205,12 +212,12 @@ class AlambresWebApp:
                 print(f"None")
                 continue
 
-            if abs(result - set_point) <= 40:
-                diff = result - set_point
-                print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
-                differences.append(diff)
-                diff_ind.append(index)
-                continue
+            # if abs(result - set_point) <= 40:
+            #     diff = result - set_point
+            #     print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
+            #     differences.append(diff)
+            #     diff_ind.append(index)
+            #     continue
 
             if compensar:
                 diff = result - set_point + compensator
@@ -227,10 +234,21 @@ class AlambresWebApp:
         if abs(align) > self.config[app]['align']:
             self.plc_client.cam_states["ErrAlig"] = True
         print(f"align: {align}")
-        print(f"Detection executed: {result_list}")
+        # print(f"Detection executed: {result_list}")
         # Calculate error   
+        # funcion para iterar sobre las diferencias y si es mayor al 50% del compensador, restarle el compensador
+        if sum(differences)/len(differences) >= compensator*0.8:
+            differences = [diff - compensator for diff in differences]
         error = sum(differences)/len(differences) if len(differences) > 0 else 0
         error_mm = error * self.config['scale']['pix2mm']
+        if error_mm <=-20:
+            # Restaura compesador en differences
+            differences = [diff + compensator for diff in differences]
+            error = sum(differences)/len(differences) if len(differences) > 0 else 0
+            error_mm = error * self.config['scale']['pix2mm']
+        
+        print(f"New differences: {differences}")
+
         new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
         print(f"-> NewPoint: {new_point}, PV_POS: {self.plc_client.plc_struct['PV_POS']}, Error: {error_mm} mm")
 
@@ -262,7 +280,8 @@ class AlambresWebApp:
         self.plc_client.cam_states['READY'] = True
         while self.run:
             # check trigger
-            if self.plc_client.plc_states["TRIG"] == False:
+            trig = self.plc_client.plc_states["TRIG"] 
+            if trig == False:
                 self.prev_state = False
                 self.plc_client.cam_states['RUNNING'] = False
                 self.plc_client.cam_states['READY'] = True
@@ -275,10 +294,12 @@ class AlambresWebApp:
                 self.plc_client.cam_states["Cam4_Err"] = False
 
             # Excetute detection trigger
-            if self.plc_client.plc_states["TRIG"] ^ self.prev_state:   
+            if trig ^ self.prev_state:   
                 
                 self.plc_client.cam_states['RUNNING'] = True
-                self.plc_client.cam_states['READY'] = False             
+                self.plc_client.cam_states['READY'] = False     
+                # Update plc data
+                # self.plc_client.read_plc_data()
                 # Execute detection
                 resp = self.detection_execution(self.plc_client.plc_struct['PROD_TYPE']) # returns a dictionarie
                 # resp = self.detection_execution(5) # returns a dictionarie
@@ -287,7 +308,7 @@ class AlambresWebApp:
                 self.plc_client.cam_struct["SP_VEL"] = 15
                 self.plc_client.cam_struct["Error"] = resp['error']
                 # Update states    
-                self.prev_state = self.plc_client.plc_states["TRIG"]
+                self.prev_state = True # self.plc_client.plc_states["TRIG"]
                 self.plc_client.cam_states['READY_CUT'] = True
                 
     def web_requests(self, app):

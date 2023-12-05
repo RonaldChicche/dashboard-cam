@@ -50,7 +50,7 @@
     "app01": {
         "description": "ajuste para corte de mallas de tipo 3 de 2m de ancho",
         "nudo": 80,
-        "align": 25,
+        "align": 22,
         "cameras": [
             {
                 "name": "cam00",

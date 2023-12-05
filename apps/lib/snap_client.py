@@ -92,6 +92,15 @@ class PLCDataSender():
                 return 0
         return 1        
 
+    def read_data_from(self):
+        self.data_control = self.plc.db_read(self.db_read_num, 0, self.db_read_size)
+        word = util.get_word(self.data_control, 0)
+        self.plc_struct["CTW"] = bin(word)[2:].zfill(16)        
+        self.plc_struct["PV_POS"] = util.get_real(self.data_control, 2)
+        self.plc_struct["PROD_TYPE"] = util.get_int(self.data_control, 6)
+        # parse plc data states
+        self.parse_plc_data(self.plc_struct["CTW"])
+
     def _read_plc_data(self):
         """ Read data from plc and convert to plc struct
             Returns:
