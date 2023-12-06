@@ -138,8 +138,8 @@ def create_app(config):
     # socketio = SocketIO(app)
     
     # Web Applications ---------------------
-    # web_app.start_thread()
-    # web_app.web_requests(app)
+    web_app.start_thread()
+    web_app.web_requests(app)
     
     register_extensions(app)
     register_blueprints(app) 

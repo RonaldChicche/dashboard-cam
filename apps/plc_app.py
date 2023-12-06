@@ -5,7 +5,7 @@ import threading
 import base64
 from flask import request
 from flask_socketio import SocketIO, emit
-from lib import XmlRpcProxyManager, PLCDataSender, ImageClient
+from .lib import XmlRpcProxyManager, PLCDataSender, ImageClient
 
 
 class AlambresWebApp:
@@ -126,15 +126,57 @@ class AlambresWebApp:
         # get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
         cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
         
-        # execute detection
+        # Execute detection
         result_list = self.camera_manager.execute_detection(cam_list)
         print(f"Detection executed: {result_list}")
-        # print(f"-> Detection executed")
-        # get images 
+
+        # Process indexes and differences
+        cameras = self.config[app]['cameras']
+        differences = []
+        for index in cam_list:
+            print(f"\t-> Camera {index}:")
+            name = f"cam{index:02d}"
+            # get the camera dictionarie from the selected app by name
+            cam = [cam for cam in cameras if cam['name'] == name][0]
+
+            # Verify plc cut order
+            result_list[index][1]['merma'] = self.plc_client.plc_states['TRIG_CUT']
+            if self.plc_client.plc_states['TRIG_CUT'] == True:
+                print("\t-> Merma ON")
+                set_point = cam['set-merma']
+            else:
+                print("\t-> Merma OFF")
+                set_point = cam['set-point']                
+            result_list[index][1]['set_point'] = set_point
+            
+            # get the result from the result_list by index
+            result = result_list[index] 
+            if result[0] == 0:
+                if abs(result[1]['y'] - set_point) <= 20:
+                    diff = 0
+                    differences.append(diff)
+                    continue
+                 
+                if result[1]['y'] > set_point:
+                    diff = result[1]['y'] - set_point
+                    print(f"\t-> Operation: {diff} = {result[1]['y']} - {set_point}")
+                elif result[1]['y'] < set_point:
+                    diff =  result[1]['y'] + self.config[app]['nudo']/self.config['scale']['pix2mm'] - set_point
+                    print(f"\t-> Operation: {diff} = {result[1]['y']} + {self.config[app]['nudo']/self.config['scale']['pix2mm']} - {set_point}")    
+                # Differences
+                result_list[index][1]['diff'] = diff
+                differences.append(diff)
+            
+        # process differences
+        error = sum(differences)/len(differences) if len(differences) > 0 else 0
+        error_mm = error * self.config['scale']['pix2mm']
+        new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
+        print(f"-> NewPoint: {new_point}, PV_POS: {self.plc_client.plc_struct['PV_POS']}, Error: {error_mm} mm")
+
+        # Get images 
         resp_images = self.camera_manager.get_images(cam_list)
-        # process images
-        header_path = os.path.join(os.path.dirname(__file__), r'lib/bmp_header.bin')
-        jpg_images = self.image_manager.generate_images(resp_images, header_path=header_path)
+        # Process images
+        jpg_images = self.image_manager.generate_images(resp_images)
         jpg_images = self.image_manager.proc_image(jpg_images, result_list)
         img_path = os.path.join(os.path.dirname(__file__), r'lib/img')
         self.image_manager.save_images(jpg_images, path=img_path)
@@ -148,54 +190,12 @@ class AlambresWebApp:
         encoded_image = base64.b64encode(image_data).decode('utf-8')
 
         print("-> Images captured : DONE")
-
-        # Process indexes and differences
-        cameras = self.config[app]['cameras']
-        differences = []
-        for index in cam_list:
-            print(f"\t-> Camera {index}:")
-            name = f"cam{index:02d}"
-            # get the camera dictionarie from the selected app by name
-            cam = [cam for cam in cameras if cam['name'] == name][0]
-
-            # Verify plc cut order
-            if self.plc_client.plc_states['TRIG_CUT'] == True:
-                print("\t-> Merma ON")
-                set_point = cam['set-merma']
-            else:
-                print("\t-> Merma OFF")
-                set_point = cam['set-point']
-
-            # get the result from the result_list by index
-            result = result_list[index]
-             
-            if result[0] == 0:
-                if abs(result[1]['y'] - set_point) <= 20:
-                    diff = 0
-                    differences.append(diff)
-                    continue
-                 
-                if result[1]['y'] > set_point:
-                    diff = result[1]['y'] - set_point
-                    print(f"\t-> Operation: {diff} = {result[1]['y']} - {set_point}")
-                elif result[1]['y'] < set_point:
-                    diff =  result[1]['y'] + self.config[app]['nudo']/self.config['scale']['pix2mm'] - set_point
-                    print(f"\t-> Operation: {diff} = {result[1]['y']} + {self.config[app]['nudo']/self.config['scale']['pix2mm']} - {set_point}")    
-                # pix to mm
-                differences.append(diff)
-            
-        # process differences
-        error = sum(differences)/len(differences) if len(differences) > 0 else 0
-        error_mm = error * self.config['scale']['pix2mm']
-        new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
-        print(f"-> NewPoint: {new_point}, PV_POS: {self.plc_client.plc_struct['PV_POS']}, Error: {error_mm} mm")
         
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True
         return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}
 
     def main(self):
-        
         
         # Release threads
         # self.plc_client.start_reading()

@@ -10,7 +10,7 @@
     "cameras": [
         {
             "name": "cam00",
-            "enabled": false,
+            "enabled": true,
             "ip": "192.168.0.47"
         },
         {
@@ -25,7 +25,7 @@
         },  
         {
             "name": "cam03",
-            "enabled": false,
+            "enabled": true,
             "ip": "192.168.0.50"
         }
     ],
@@ -48,7 +48,7 @@
         "nudo": 76,
         "cameras": [
             {
-                "name": "cam01",
+                "name": "cam02",
                 "set-point": 365,
                 "set-merma": 240
             }
@@ -74,7 +74,7 @@
 
     "app03": {
         "description": "ajuste para corte de mallas de tipo 2 de 2m de ancho",  
-        "nudo": 24.70,
+        "nudo": 76,
         "cameras": [
             {
                 "name": "cam01",
