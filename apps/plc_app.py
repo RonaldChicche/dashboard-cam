@@ -109,7 +109,8 @@ class AlambresWebApp:
     def calcular_pendiente(self, lista_ajustada, list_index):
         # list of pos from cameras from config
         # lista_pos = [self.config['cameras'][i]['pos'] for i in list_index]
-
+        if len(lista_ajustada) <= 1:
+            return 0
         x = np.arange(len(lista_ajustada))
         # x = np.array(lista_pos)
         y = np.array(lista_ajustada)
@@ -230,7 +231,17 @@ class AlambresWebApp:
             diff_ind.append(index)
         
         # Align
-        align = self.calcular_pendiente(differences, diff_ind)
+        if len(differences) <= 1:
+            # buscar el primer result de result_list que no sea None
+            try:
+                f_result = next((x for x in result_list if x is not None and x[0] == 0), None) 
+                align = f_result[1]['orientation']
+            except Exception as e:
+                print(f"Se produjo un error con el alineamiento: {e}")
+                align = 0
+
+        else:
+            align = self.calcular_pendiente(differences, diff_ind)
         if abs(align) > self.config[app]['align']:
             self.plc_client.cam_states["ErrAlig"] = True
         print(f"align: {align}")

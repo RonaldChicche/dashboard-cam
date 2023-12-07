@@ -36,13 +36,13 @@
       
     "app00": {
         "description": "ajuste test de prueba",
-        "nudo": 80,
-        "align": 23,
+        "nudo": 85,
+        "align": 7,
         "cameras": [
             {
                 "name": "cam00",
-                "set-point": 360,
-                "set-merma": 245
+                "set-point": 70,
+                "set-merma": 200
             }
         ] 
     },
