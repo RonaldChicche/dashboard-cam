@@ -125,3 +125,19 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
 });
+
+// SocketIO
+const socket = io.connect('http://' + document.domain + ':' + location.port);
+
+socket.on('connect', function() {
+    socket.emit('client_connected');
+});
+
+socket.on('disconnect', function() {
+    console.log('Disconnected from server');
+});
+
+socket.on('connect-response', function(data) {
+    console.log(`Server response: ${data.response}`);
+});
+

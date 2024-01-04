@@ -3,8 +3,6 @@ import concurrent.futures
 import threading
 import socket
 import time
-import json
-import os
 
 
 # This function will return the IP address of the device even when it is conncted to a VPN
@@ -48,22 +46,26 @@ class XmlRpcCameraProxy:
     def connect(self, platform):
         print(f"Connecting to {self.ip}...")
         self.profile = {}
-        resp = self.proxy.xmlConnect(self.user_ip, platform)
-        if resp[0] == 0:
-            self.profile['id'] = resp[1]
-            self.profile['session'] = resp[2]
-            self.profile['model'] = resp[3]
-            self.profile['firmware_version'] = resp[4]
-            network_params = self.get_network_parameters()
-            self.profile['ip'] = network_params['ip']
-            self.profile['subnet'] = network_params['subnet']
-            self.profile['gateway'] = network_params['gateway']
-            self.profile['http_port'] = network_params['http_port']
-            self.profile['udp_port'] = network_params['udp_port']
-            self.profile['mac'] = network_params['mac']
-            return [0, self.profile]
-        else:
-            print(f"Error connecting to {self.ip}: {resp[0]}")
+        try:
+            resp = self.proxy.xmlConnect(self.user_ip, platform)
+            if resp[0] == 0:
+                self.profile['id'] = resp[1]
+                self.profile['session'] = resp[2]
+                self.profile['model'] = resp[3]
+                self.profile['firmware_version'] = resp[4]
+                network_params = self.get_network_parameters()
+                self.profile['ip'] = network_params['ip']
+                self.profile['subnet'] = network_params['subnet']
+                self.profile['gateway'] = network_params['gateway']
+                self.profile['http_port'] = network_params['http_port']
+                self.profile['udp_port'] = network_params['udp_port']
+                self.profile['mac'] = network_params['mac']
+                return [0, self.profile]
+            else:
+                print(f"Error connecting to {self.ip}: {resp[0]}")
+                return [1]
+        except socket.timeout:
+            print(f"Timeout connecting to {self.ip}")
             return [1]
         
     # thread to keep alive the connection
@@ -133,14 +135,13 @@ class XmlRpcCameraProxy:
                 found = True
                 break
         if found:
-            print(f'<{self.ip}> Init config: ', end='')
+            # print(f'<{self.ip}> Init config: ', end='')
             self.open_config = self.proxy.xmlOpenConfiguration(self.session['name'], self.session['id'])
             # print(self.open_config, end='')
             return [0]
         else:
             print(f"Error setting configuration: {config_id}")
             return [1]
-
 
     def detection(self):
         result = {}
@@ -176,9 +177,7 @@ class XmlRpcCameraProxy:
             return [0, result]
         else:
             return [1]
-            
-
-
+        
     def execute_detection(self, tries=2):
         self.test_config = self.proxy.xmlTestConfig(1)
         while tries > 0:
@@ -216,21 +215,10 @@ class XmlRpcCameraProxy:
 
 class XmlRpcProxyManager:
 
-    def __init__(self, plc_client):
+    def __init__(self):
         self.platform = "3.5.0061"
         self.port = 8080
         self.proxies = []
-        self.trig_lock = False
-        self.plc_states = plc_client.plc_states
-        self.plc_struct = plc_client.plc_struct
-        self.cam_states = plc_client.cam_states
-        self.cam_struct = plc_client.cam_struct
-        # Load config
-        self.config_path = os.path.join(os.path.dirname(__file__), 'config.json')
-        self.config = self.load_config()
-        self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._check_trigger)
-        self.thread_started = False
 
     def __getitem__(self, index):
         """
@@ -253,92 +241,6 @@ class XmlRpcProxyManager:
             print(proxy)
         """
         return iter(self.proxies)
-
-    def load_config(self):
-        with open(self.config_path, 'r') as f:
-            config = json.load(f)
-        return config
-
-    def _check_trigger(self):
-        self.thread_started = True
-        print("CAM MANAGER STARTED")
-        self.trig_lock = False
-        self.cam_states["READY"] = True 
-        while not self._stop_event.is_set():
-            # print(self.plc_states["TRIG"]) 
-            # print(self.plc_struct["PV_POS"])
-            # Logic to activate once the trig_lock when the trigger is activated otherwise deactivate
-            
-            self.trig_lock = not (self.plc_states["TRIG"] ^ self.trig_lock)
-
-            if self.plc_states["TRIG"] and not self.trig_lock:
-                # Check cameras states
-                
-                beat = self.heart_beat()
-                print(beat)
-                for b in beat:
-                    self.cam_states["CAM1_CON"] = b[0]
-                    self.cam_states["CAM2_CON"] = b[0]
-                    self.cam_states["CAM3_CON"] = b[0]
-                    self.cam_states["CAM4_CON"] = b[0]
-                
-                # Execute detection
-                results = self.execute_detection()
-                images = self.get_images()
-
-                # Calculate error
-                # sp_app = 90.0
-                # diferences = [sp_app - res[1]["y"] for res in results if res[0] == 0]
-                # error = sum(diferences)/len(diferences) if len(diferences) > 0 else 0
-                # set_point = sp_app + error
-                # # scale
-                # set_point = set_point * 3 / 10
-                # error = error * 3 /10
-                
-                # Select app
-                # app = self.plc_struct["PROD_TYPE"]
-                app = 1
-                app = f"app{app:02d}"
-                compensation = self.config[app]["compensation"]
-                differences = []
-                for res in results:
-                    if res[0] == 0:
-                        if res[1]["y"] < compensation:
-                            diff = compensation - res[1]["y"] - 37
-                            print(res[1]["y"], diff)
-                        elif res[1]["y"] >= compensation:
-                            diff = compensation - res[1]["y"] 
-                        # pix to mm
-                        diff = diff * 0.19
-                        differences.append(diff)
-                print(f"Differences: {differences}, Com: {compensation}")
-                error = sum(differences)/len(differences) if len(differences) > 0 else 0
-                set_point = self.plc_struct["PV_POS"] * 10 - round(error)
-
-
-                # Send to PLC
-                self.cam_struct["SP_POS"] = set_point/10
-                self.cam_struct["Error"] = error
-                # print(results)
-                self.cam_states["READY_CUT"] = True
-                print(self.cam_struct)
-
-                self.trig_lock = True
-
-            if self.plc_states["TRIG"] == False:
-                # self.cam_states["READY"] = False
-                self.cam_states["READY_CUT"] = False
-                self.trig_lock = False
-            
-            time.sleep(0.1)
-
-    def start_reading(self):
-        self._thread.start()
-
-    def stop_reading(self):
-        if self.thread_started:
-            self._stop_event.set()
-            self._thread.join()
     
     def connect(self, ip_list:list):
         self.ip_list = ip_list

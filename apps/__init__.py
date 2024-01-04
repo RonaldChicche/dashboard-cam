@@ -12,7 +12,7 @@ from importlib import import_module
 from flask_socketio import SocketIO
 from flask import request, jsonify, render_template_string
 
-from .lib import XmlRpcProxyManager, PLCDataSender, ImageClient
+from .plc_app import AlambresWebApp
 import base64
 
 
@@ -21,15 +21,14 @@ login_manager = LoginManager()
 
 
 # Application
-plc_client = PLCDataSender()
-camera_manager = XmlRpcProxyManager(plc_client)
-image_manager = ImageClient()
+web_app = AlambresWebApp()
 
-def register_extensions(app):
+def register_extensions(app, socketio):
     db.init_app(app)
     login_manager.init_app(app)
 
-    # Applications
+    # Web Applications ---------------------
+    web_app.web_requests(app, socketio)
 
 def register_blueprints(app):
     for module_name in ('authentication', 'home'):
@@ -135,8 +134,9 @@ def create_app(config):
     app = Flask(__name__)
     app.config.from_object(config)
     socketio = SocketIO(app)
-    register_extensions(app)
+    register_extensions(app, socketio)
     register_blueprints(app)
     # Application
-    manual_devices(app)
+    # manual_devices(app)
+    # web_app.start_thread()
     return app, socketio

@@ -1,12 +1,44 @@
 {
+    "plc": {
+        "ip": "192.168.0.1"
+    },
+
+    "cameras": [
+        {
+            "name": "cam01",
+            "enabled": true,
+            "ip": "192.168.0.47"
+        },
+        {
+            "name": "cam02",
+            "enabled": true,
+            "ip": "192.168.0.48"
+        },
+        {
+            "name": "cam03",
+            "enabled": false,
+            "ip": "192.168.0.49"
+        },  
+        {
+            "name": "cam04",
+            "enabled": true,
+            "ip": "192.168.0.50"
+        }
+    ],
+    
+    
     "app00": {
         "description": "ajuste de merma para siguiente malla",
-        "compensation": -42,
-        "cameras": 1
+        "set-point": -42
     },
     "app01": {
-        "description": "malla tipo 1",
-        "compensation": 120,    
-        "cameras": 1
+        "description": "ajuste para corte de mallas de tipo 1",
+        "set-point": 120,    
+        "nudo": 36.84
+    },
+    "app02": {
+        "description": "ajuste para corte de mallas de tipo 2",
+        "set-point": 70,    
+        "nudo": 16.00
     }
 }
