@@ -119,11 +119,6 @@ class AlambresWebApp:
         # Check Camera and PLC
         pass
 
-    def emit_data(self, data, event):
-        # Emit data to web through socketio
-        if self.socketio is not None:
-            self.socketio.emit(event, data)
-
     def main(self):
         
         # self.plc_client.start_reading()
