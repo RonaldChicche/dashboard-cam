@@ -1,5 +1,6 @@
 import xmlrpc.client
 import concurrent.futures
+import xml
 import threading
 import socket
 import time
@@ -112,8 +113,9 @@ class XmlRpcCameraProxy:
         return network_params
 
     def init_config(self):
-        resp = self.proxy.xmlGetConfigList()
-        if resp[0] == 0:
+        try:
+            resp = self.proxy.xmlGetConfigList()
+            # if resp[0] == 0:
             self.available_configs = resp[1]
             self.size_configs = resp[3]
             self.config_id = resp[4] # this is the only attribute that i know what is ... i thinnk
@@ -122,10 +124,10 @@ class XmlRpcCameraProxy:
             # skip the first 4 elements and save in gruoups of 5 with a key the rest
             for i in range(4, len(resp), 5):
                 self.config_parameters.append(dict(zip(keys, resp[i:i+5])))
-            return [0, self.config_parameters]
-        else:
-            print(f"Error getting configuration list: {resp[0]}")
-            return [1]
+            return 0
+        except socket.timeout:
+            print(f"Error getting configuration list: {self.ip}")
+            return 1
 
     def set_config(self, config_id):
         found = False
@@ -135,13 +137,17 @@ class XmlRpcCameraProxy:
                 found = True
                 break
         if found:
-            # print(f'<{self.ip}> Init config: ', end='')
-            self.open_config = self.proxy.xmlOpenConfiguration(self.session['name'], self.session['id'])
-            # print(self.open_config, end='')
-            return [0]
+            try: 
+                # print(f'<{self.ip}> Init config: ', end='')
+                self.open_config = self.proxy.xmlOpenConfiguration(self.session['name'], self.session['id'])
+                # print(self.open_config, end='')
+                return 0
+            except socket.timeout:
+                print(f"Error setting configuration: {config_id}")
+                return 1
         else:
             print(f"Error setting configuration: {config_id}")
-            return [1]
+            return 1
 
     def detection(self):
         result = {}
@@ -203,15 +209,35 @@ class XmlRpcCameraProxy:
         return [1, result]
     
     def get_images(self):
-        self.current_image = self.proxy.xmlGetCurrentImage()
-        return self.current_image[1].data
+        try:
+            self.current_image = self.proxy.xmlGetCurrentImage()
+            return self.current_image[1].data
+        except xml.parsers.expat.ExpatError:
+            # Maneja el error aquí
+            print("Error al obtener la imagen de la cámara")
+            return None
     
     def heart_beat(self):
-        return self.proxy.xmlHeartbeat()
+        return self.proxy.xmlHeartbeat()[0]
     
     def poll(self):
         return self.proxy.xmlPollResults()
         
+# import xmlrpc.client    -->  para evitar cruce de peticiones crea conexion nueva
+
+# class MyXMLRPCClient:
+#     def __init__(self, url):
+#         self.url = url
+
+#     def xmlHeartbeat(self):
+#         with xmlrpc.client.ServerProxy(self.url) as proxy:
+#             return proxy.xmlHeartbeat()
+
+# # En tu código, reemplaza `self.proxy.xmlHeartbeat()` con:
+# client = MyXMLRPCClient(url)
+# return client.xmlHeartbeat()
+
+
 
 class XmlRpcProxyManager:
 
@@ -250,6 +276,20 @@ class XmlRpcProxyManager:
             results = [future.result() for future in futures]
         return results
     
+    # def connect(self, cam_list):
+    #     """ cam_list = [{'ip': '0.0.0.0', 'enable': True}, ...] 
+    #     """
+    #     self.cam_list = cam_list
+    #     self.proxies = {}
+    #     for cam in self.cam_list:
+    #         if cam['enable']:
+    #             proxy = XmlRpcCameraProxy(cam['ip'], self.port)
+    #             proxy.connect(self.platform)
+    #             self.proxies[cam['ip']] = proxy
+    #         else:
+    #             self.proxies[cam['ip']] = None
+    #     return self.proxies
+    
     def disconnect(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
             futures = [executor.submit(proxy.disconnect) for proxy in self.proxies]
@@ -272,15 +312,19 @@ class XmlRpcProxyManager:
             results = [future.result() for future in futures]
         return results
 
-    def execute_detection(self, tries=3):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
-            futures = [executor.submit(proxy.execute_detection) for proxy in self.proxies]
+    def execute_detection(self, cam, tries=2):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=cam) as executor:
+            # Usar solo los primeros 'cam' proxies
+            selected_proxies = self.proxies[:cam]
+            futures = [executor.submit(proxy.execute_detection) for proxy in selected_proxies]
             results = [future.result() for future in futures]
         return results
     
-    def get_images(self):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
-            futures = [executor.submit(proxy.get_images) for proxy in self.proxies]
+    def get_images(self, cam):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=cam) as executor:
+            # Usar solo los primeros 'cam' proxies
+            selected_proxies = self.proxies[:cam]
+            futures = [executor.submit(proxy.get_images) for proxy in selected_proxies]
             results = [future.result() for future in futures]
         return results
     

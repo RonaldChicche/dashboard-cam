@@ -12,10 +12,11 @@ from apps.config import config_dict
 from apps import create_app, db
 
 # WARNING: Don't run with debug turned on in production!
-DEBUG = (os.getenv('DEBUG', 'False') == 'True')
-
+# DEBUG = (os.getenv('DEBUG', 'False') == 'True')
+DEBUG = False
 # The configuration
-get_config_mode = 'Debug' if DEBUG else 'Production'
+# get_config_mode = 'Debug' if DEBUG else 'Production'
+get_config_mode = 'Production'
 
 try:
 
@@ -25,7 +26,7 @@ try:
 except KeyError:
     exit('Error: Invalid <config_mode>. Expected values [Debug, Production] ')
 
-app, socketio = create_app(app_config)
+app = create_app(app_config)
 Migrate(app, db)
 
 if not DEBUG:
@@ -38,4 +39,4 @@ if DEBUG:
     app.logger.info('ASSETS_ROOT      = ' + app_config.ASSETS_ROOT )
 
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, use_reloader=False)

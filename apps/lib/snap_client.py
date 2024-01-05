@@ -34,7 +34,7 @@ class PLCDataSender():
 
     plc_states = {
         "None0"     : False,
-        "CHNG_APP"  : False,
+        "APP"       : False,
         "RESET"     : False,
         "CUT_DONE"  : False,
         "None3"     : False,
@@ -90,8 +90,7 @@ class PLCDataSender():
             self.plc.connect(self.ip, self.rack, self.slot)
             if self.plc.get_connected():
                 return 0
-        return 1
-        
+        return 1        
 
     def _read_plc_data(self):
         """ Read data from plc and convert to plc struct
