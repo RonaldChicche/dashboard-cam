@@ -1,31 +1,32 @@
-import nmap
-import socket
+from flask import Flask, render_template
+from flask_socketio import SocketIO
+import threading
+import eventlet
+import time
 
-def get_ip_address():
-    # Get IP address
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip_address = s.getsockname()[0]
-    s.close()
-    return ip_address
+eventlet.monkey_patch()  # Important to make standard threads cooperate with eventlet
 
-# Set up nmap scanner
-scanner = nmap.PortScanner()
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, async_mode='eventlet')
 
-# Get IP address and keyword from user input
-ip_address = get_ip_address()
-print(f"IP address: {ip_address}")
-keyword = input("Enter keyword: ")
+def camera_thread():
+    """Function to handle camera connections and events."""
+    while True:
+        # Here you would add your camera connection and event handling logic
+        # For demonstration, we're just printing a message every 5 seconds
+        print("Camera thread is running...")
+        time.sleep(5)
+        # Emitting a message to all connected clients
+        socketio.emit('camera_update', {'data': 'New image or camera event'})
 
-# Scan network for devices
-scanner.scan(hosts=f"{ip_address}/24", arguments="-sP")
+@app.route('/')
+def index():
+    """Serve the index HTML file."""
+    return render_template('index.html')
 
-# Print list of devices that match keyword
-for host in scanner.all_hosts():
-    # print hostnames
-    if 'mac' in scanner[host]['addresses']:
-        mac_address = scanner[host]['addresses']['mac']
-        manufacturer = scanner[host]['vendor'][mac_address]
-        if keyword in manufacturer.lower():
-            mac_address = scanner[host]['addresses']['mac']
-            print(f"Device: {host} ({mac_address}) - Manufacturer: {manufacturer}")
+# Start the camera thread
+threading.Thread(target=camera_thread, daemon=True).start()
+
+if __name__ == '__main__':
+    socketio.run(app)

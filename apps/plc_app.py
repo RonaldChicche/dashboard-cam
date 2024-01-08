@@ -5,7 +5,7 @@ import threading
 import base64
 from flask import request
 from flask_socketio import SocketIO, emit
-from .lib import XmlRpcProxyManager, PLCDataSender, ImageClient
+from lib import XmlRpcProxyManager, PLCDataSender, ImageClient
 
 
 class AlambresWebApp:
@@ -22,10 +22,11 @@ class AlambresWebApp:
         # timer
         self.timer = time.time()
         self.beat_time = 50
-        # Connection
+
+         # Connection
         try:
             self.connect_cameras()
-            self.connect_plc()
+            # self.connect_plc()
         except RuntimeError as e:
             print("Error: ", e)
 
@@ -33,7 +34,7 @@ class AlambresWebApp:
         self.stop()
 
     def start_thread(self):
-        self.process = threading.Thread(target=self.main)
+        self.process = threading.Thread(target=self.main, daemon=True)
         self.process.start()
 
     def stop(self):
@@ -48,16 +49,21 @@ class AlambresWebApp:
     
     def connect_cameras(self):
         # Connect to cameras
-        cam_list = [cam['ip'] for cam in self.config['cameras'] if cam['enabled']]
-        disable_index = [i for i, cam in enumerate(self.config['cameras']) if not cam['enabled']]
+        cam_list = [cam['ip'] for cam in self.config['cameras']]
+        enable_index = [i for i, cam in enumerate(self.config['cameras']) if cam['enabled']]
         try:
-            cam_con = self.camera_manager.connect(cam_list)
+            cam_con = self.camera_manager.connect(cam_list, enable_index)
             # add disabled cameras by their index with responses
-            for i in disable_index:
-                cam_con.insert(i, (1, {'mac': 'disabled', 'ip': self.config['cameras'][i]['ip']}))
+            # for i in range(len(cam_list)):
+            #     if i not in enable_index:
+            #         cam_con.insert(i, (1, {'mac': 'disabled', 'ip': self.config['cameras'][i]['ip']}))
                 # cam_set.insert(i, (0))
             # print
             for cam in range(len(cam_con)):
+                if cam_con[cam] is None:
+                    print(f"-> Camera {cam+1} not connected")
+                    self.plc_client.cam_states[f'CAM{cam+1}_CON'] = False
+                    continue
                 # print(cam_con[cam])
                 if cam_con[cam][0] != 0:
                     print(f"-> Camera {cam+1} not connected")
@@ -119,9 +125,10 @@ class AlambresWebApp:
 
         # get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
         cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
-
+        
         # execute detection
         result_list = self.camera_manager.execute_detection(cam_list)
+        print(f"Detection executed: {result_list}")
         # print(f"-> Detection executed")
         # get images 
         resp_images = self.camera_manager.get_images(cam_list)
@@ -187,13 +194,12 @@ class AlambresWebApp:
         self.plc_client.cam_states['READY'] = True
         return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}
 
-    def check_connection(self):
-        # Check Camera and PLC
-        pass
-
     def main(self):
+        
+        
         # Release threads
-        self.plc_client.start_reading()
+        # self.plc_client.start_reading()
+        
         self.prev_state = False
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True
@@ -223,8 +229,6 @@ class AlambresWebApp:
                 self.prev_state = self.plc_client.plc_states["TRIG"]
                 self.plc_client.cam_states['READY_CUT'] = True
                 
-
-    
     def web_requests(self, app):
 
         @app.route('/connect', methods=['POST'])
@@ -257,9 +261,8 @@ class AlambresWebApp:
         #     emit('connect-response', {'response': self.config['cameras']})
         
 
-
-
 if __name__ == "__main__":
     app = AlambresWebApp()
-    app.method_test(1)
+    print(f"Connected devices: {app.camera_manager.proxies}")
+    app.detection_execution(2)
 

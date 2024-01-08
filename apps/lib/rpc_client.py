@@ -259,31 +259,23 @@ class XmlRpcProxyManager:
         """
         return iter(self.proxies)
     
-    def connect(self, ip_list:list):
+    def connect(self, ip_list:list, enable_index:list):
         self.ip_list = ip_list
-        self.proxies = [XmlRpcCameraProxy(ip, self.port) for ip in self.ip_list]
+        self.proxies = [XmlRpcCameraProxy(self.ip_list[i], self.port) for i in range(len(self.ip_list)) if i in enable_index]
+        for i in range(len(self.ip_list)):
+            if i not in enable_index:
+                self.proxies.insert(i, None)
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
-            futures = [executor.submit(proxy.connect, self.platform) for proxy in self.proxies]
-            results = [future.result() for future in futures]
+            futures = [executor.submit(proxy.connect, self.platform) for proxy in self.proxies if proxy is not None]
+        results = [None, None, None, None]    
+        for i, future in enumerate(futures):
+            results[enable_index[i]] = future.result()  
+                 
         return results
-    
-    # def connect(self, cam_list):
-    #     """ cam_list = [{'ip': '0.0.0.0', 'enable': True}, ...] 
-    #     """
-    #     self.cam_list = cam_list
-    #     self.proxies = {}
-    #     for cam in self.cam_list:
-    #         if cam['enable']:
-    #             proxy = XmlRpcCameraProxy(cam['ip'], self.port)
-    #             proxy.connect(self.platform)
-    #             self.proxies[cam['ip']] = proxy
-    #         else:
-    #             self.proxies[cam['ip']] = None
-    #     return self.proxies
     
     def disconnect(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
-            futures = [executor.submit(proxy.disconnect) for proxy in self.proxies]
+            futures = [executor.submit(proxy.disconnect) for proxy in self.proxies if proxy is not None]
             results = [future.result() for future in futures]
         return results
 
@@ -293,13 +285,13 @@ class XmlRpcProxyManager:
 
     def init_config(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
-            futures = [executor.submit(proxy.init_config) for proxy in self.proxies]
+            futures = [executor.submit(proxy.init_config) for proxy in self.proxies if proxy is not None]
             results = [future.result() for future in futures]
         return results
     
     def set_config(self, config_id):
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.proxies)) as executor:
-            futures = [executor.submit(proxy.set_config, config_id) for proxy in self.proxies]
+            futures = [executor.submit(proxy.set_config, config_id) for proxy in self.proxies if proxy is not None]
             results = [future.result() for future in futures]
         return results
 
@@ -307,7 +299,7 @@ class XmlRpcProxyManager:
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(cam_list)) as executor:
             # cam_list es una lista de indeces de las camaras que se van a usar
             selected_proxies = [self.proxies[cam] for cam in cam_list]
-            futures = [executor.submit(proxy.execute_detection) for proxy in selected_proxies]
+            futures = [executor.submit(proxy.execute_detection) for proxy in selected_proxies if proxy is not None]
             # put the results in a list in the same index as the cam_list
             results = [None, None, None, None]
             for i, future in enumerate(futures):
@@ -319,7 +311,8 @@ class XmlRpcProxyManager:
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(cam_list)) as executor:
             # Usar solo los primeros 'cam' proxies
             selected_proxies = [self.proxies[cam] for cam in cam_list]
-            futures = [executor.submit(proxy.get_images) for proxy in selected_proxies]
+            print("Selected proxies img ", selected_proxies)
+            futures = [executor.submit(proxy.get_images) for proxy in selected_proxies if proxy is not None]
             results = [None, None, None, None]
             for i, future in enumerate(futures):
                 results[cam_list[i]] = future.result()

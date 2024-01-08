@@ -13,8 +13,11 @@ from flask_socketio import SocketIO
 from flask import request, jsonify, render_template_string
 
 from .plc_app import AlambresWebApp
+
+# import eventlet
 import base64
 
+# eventlet.monkey_patch()  # Important to make standard threads cooperate with eventlet
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -26,9 +29,6 @@ web_app = AlambresWebApp()
 def register_extensions(app):
     db.init_app(app)
     login_manager.init_app(app)
-
-    # Web Applications ---------------------
-    web_app.web_requests(app)
 
 def register_blueprints(app):
     for module_name in ('authentication', 'home'):
@@ -134,10 +134,13 @@ def manual_devices(app):
 def create_app(config):
     app = Flask(__name__)
     app.config.from_object(config)
-    # socketio = SocketIO(app, logger=True, engineio_logger=True, async_mode='threading')
+    socketio = SocketIO(app)
+    # socketio = SocketIO(app)
+    
+    # Web Applications ---------------------
+    # web_app.start_thread()
+    # web_app.web_requests(app)
+    
     register_extensions(app)
-    register_blueprints(app)
-    # Application
-    # manual_devices(app)
-    web_app.start_thread()
-    return app
+    register_blueprints(app) 
+    return app, socketio
