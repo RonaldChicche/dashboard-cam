@@ -19,11 +19,10 @@ class AlambresWebApp:
         self.camera_manager = XmlRpcProxyManager()
         self.plc_client = PLCDataSender()
         self.image_manager = ImageClient()
-        # timer
+        # Timer
         self.timer = time.time()
         self.beat_time = 50
-
-         # Connection
+        # Connection
         try:
             self.connect_cameras()
             # self.connect_plc()
@@ -123,7 +122,7 @@ class AlambresWebApp:
         # Process app
         app = f"app{app:02d}"
 
-        # get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
+        # Get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
         cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
         
         # Execute detection
@@ -136,7 +135,7 @@ class AlambresWebApp:
         for index in cam_list:
             print(f"\t-> Camera {index}:")
             name = f"cam{index:02d}"
-            # get the camera dictionarie from the selected app by name
+            # Get the camera dictionarie from the selected app by name
             cam = [cam for cam in cameras if cam['name'] == name][0]
 
             # Verify plc cut order
@@ -149,7 +148,7 @@ class AlambresWebApp:
                 set_point = cam['set-point']                
             result_list[index][1]['set_point'] = set_point
             
-            # get the result from the result_list by index
+            # Get the result from the result_list by index
             result = result_list[index] 
             if result[0] == 0:
                 if abs(result[1]['y'] - set_point) <= 20:
@@ -166,8 +165,11 @@ class AlambresWebApp:
                 # Differences
                 result_list[index][1]['diff'] = diff
                 differences.append(diff)
-            
-        # process differences
+        
+        # Align error --------------------------------------------------
+        
+
+        # Process differences
         error = sum(differences)/len(differences) if len(differences) > 0 else 0
         error_mm = error * self.config['scale']['pix2mm']
         new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
@@ -193,10 +195,9 @@ class AlambresWebApp:
         
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True
-        return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}
+        return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image, 'results_cam': result_list}
 
-    def main(self):
-        
+    def main(self):        
         # Release threads
         # self.plc_client.start_reading()
         
@@ -234,12 +235,32 @@ class AlambresWebApp:
         @app.route('/connect', methods=['POST'])
         def web_connect():
             data = request.get_json()
-            # print(data)
+            
+            # Save data into config file
+            self.config['cameras'] = data['cameras']
+            self.config['plc'] = data['plc']
+
+            # Save config
+            with open(self.config_path, 'w') as f:
+                json.dump(self.config, f, indent=4)
+
+            # Load config
+            self.config = self.load_config()
+
+            return {'status': 'ok'}
+
 
         @app.route('/disconnect', methods=['POST'])
         def web_disconnect():
             # Connections
             print("Disconnecting devices...")
+
+            # Disconnect cameras
+            # self.camera_manager.disconnect()
+
+            # Disconnect plc
+            # self.plc_client.stop_reading()
+            # self.plc_client.disconnect_plc()
 
             return {'status': 'ok'}
         
@@ -252,7 +273,7 @@ class AlambresWebApp:
             resp = self.detection_execution(camAppState)
             print(f"Detection executed")
 
-            return {'status': 'ok', 'imagen': resp['imagen'], 'error': resp['error'], 'new_point': resp['new_point']} 
+            return {'status': 'ok', 'imagen': resp['imagen'], 'error': resp['error'], 'new_point': resp['new_point'], 'results_cam': resp['results_cam']} 
         
         # Socketio events ----------------------------------------------
         # @socketio.on('connect')
