@@ -12,6 +12,7 @@ class AlambresWebApp:
     def __init__(self):
         # Thread
         self.process = None
+        self.run = True
         # Load config
         self.config_path = os.path.join(os.path.dirname(__file__), 'lib/config.json')
         self.config = self.load_config()
@@ -38,6 +39,7 @@ class AlambresWebApp:
 
     def stop(self):
         if self.process is not None:
+            self.run = False
             self.process.join()
             self.process = None  
         if self.camera_manager is not None:
@@ -218,7 +220,7 @@ class AlambresWebApp:
         self.prev_state = False
         self.plc_client.cam_states['RUNNING'] = False
         self.plc_client.cam_states['READY'] = True
-        while True:
+        while self.run:
             # make a beat for cameras 
             # if time.time() - self.timer > self.beat_time:
                 # self.timer = time.time()

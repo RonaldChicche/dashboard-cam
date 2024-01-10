@@ -26,7 +26,7 @@ try:
 except KeyError:
     exit('Error: Invalid <config_mode>. Expected values [Debug, Production] ')
 
-app, socketio = create_app(app_config)
+app, socketio, web_app = create_app(app_config)
 Migrate(app, db)
 
 if not DEBUG:
@@ -40,4 +40,12 @@ if DEBUG:
 
 if __name__ == "__main__":
     # app.run(host='0.0.0.0', port=5000, use_reloader=False)
-    socketio.run(app, host="0.0.0.0", port=5000, log_output=True)
+    try:
+        socketio.run(app, host="0.0.0.0", port=5000, log_output=True)
+    except KeyboardInterrupt:
+        print("Keyboard interrupt")
+        exit()
+    finally:
+        print("Closing...")
+        web_app.stop()
+        print("Done")

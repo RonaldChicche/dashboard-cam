@@ -143,4 +143,4 @@ def create_app(config):
     
     register_extensions(app)
     register_blueprints(app) 
-    return app, socketio
+    return app, socketio, web_app
