@@ -72,23 +72,23 @@
         "cameras": [
             {
                 "name": "cam00",
-                "set-point": 85,
-                "set-merma": 270
+                "set-point": 189,
+                "set-merma": 45
             },
             {
                 "name": "cam01",
-                "set-point": 80,
-                "set-merma": 280
+                "set-point": 172,
+                "set-merma": 45
             },
             {
                 "name": "cam02",
-                "set-point": 80,
-                "set-merma": 287
+                "set-point": 190,
+                "set-merma": 45
             },
             {
                 "name": "cam03",
-                "set-point": 80,
-                "set-merma": 290
+                "set-point": 190,
+                "set-merma": 45
             }
         ]
     },

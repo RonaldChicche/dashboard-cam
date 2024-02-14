@@ -213,13 +213,6 @@ class AlambresWebApp:
                 print(f"None")
                 continue
 
-            # if abs(result - set_point) <= 40:
-            #     diff = result - set_point
-            #     print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
-            #     differences.append(diff)
-            #     diff_ind.append(index)
-            #     continue
-
             if compensar:
                 diff = result - set_point + compensator
                 print(f"\t\t-> Operation: {diff} = {result} - {set_point} + {compensator}")
