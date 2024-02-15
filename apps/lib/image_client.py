@@ -16,7 +16,7 @@ BLUE   = (  0,   0, 255)
 VIOLET = (255,   0, 255)
 
 
-Objeto = namedtuple('Objeto', ['x', 'y', 'ori', 'merma', 'set_point'])
+Objeto = namedtuple('Objeto', ['x', 'y', 'ori', 'set_point'])
 
 class ImageClient():
     def __init__(self):
@@ -116,7 +116,6 @@ class ImageClient():
             obj = Objeto(int(result_list[i][1]['x']), 
                          int(result_list[i][1]['y']), 
                          int(result_list[i][1]['orientation']),
-                         result_list[i][1]['merma'],
                          result_list[i][1]['set_point'])
             # Print analysis on image
             # dx = img_w/2 - obj.x

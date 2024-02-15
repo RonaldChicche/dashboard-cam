@@ -129,7 +129,7 @@ class AlambresWebApp:
         lista_sin_outliers = [x for x in lista if x not in outliers]
         mediana = np.median(lista_sin_outliers)
 
-        # Ajustar outliers y elegir el valor más cercano a la mediana
+        # Ajustar outliers y elegir el valor más cercano a la mediana(prom)
         outliers_ajustados = []
         for outlier in outliers:
             ajuste_suma = outlier + compensacion
@@ -145,35 +145,28 @@ class AlambresWebApp:
         
         return lista_ajustada
     
-    def detection_execution(self, app):
-        """Return: {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}}"""
-        # Execute detection
-        print("Executing detection...")
-        print(f"PLC: {self.plc_client.plc_states}")
+    def generate_images(self, cam_list, result_list):
+        # Get images 
+        resp_images = self.camera_manager.get_images(cam_list)
+        # Process images
+        jpg_images = self.image_manager.generate_images(resp_images)
+        jpg_images = self.image_manager.proc_image(jpg_images, result_list)
+        img_path = os.path.join(os.path.dirname(__file__), r'lib/img')
+        # self.image_manager.save_images(jpg_images, path=img_path)
+        self.image_manager.save_image(jpg_images, path=img_path)
         
-        # Process app
-        app = f"app{app:02d}"
-        compensator = self.config[app]['nudo']/self.config['scale']['pix2mm']
+        with open(img_path + f"/all.jpg", "rb") as f:
+            image_data = f.read()
+        # Encode image data as base64 string
+        encoded_image = base64.b64encode(image_data).decode('utf-8')
+        return encoded_image
 
-        # Get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
-        cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
-        disabled_list = [index for index, cam in enumerate(self.config[app]['cameras']) if not self.config['cameras'][int(cam["name"][3:])]['enabled']]
-        
-        # Execute detection
-        result_list = self.camera_manager.execute_detection(cam_list)
-
-        # Verify plc cut order
-        merma = self.plc_client.plc_states['TRIG_CUT']
-        if merma == True:
-            print("\t-> Merma ON -------------------------")
-            set_key = 'set-merma'
-        else:
-            print("\t-> Merma OFF -------------------------")
-            set_key = 'set-point'     
-        # Promedio de setpoints
+    def process_results(self, result_list, cam_list, app, compensator):
+        set_key = 'set-point'
+        # Promedio de setpoints para detectar outliers
         prom_set_point = sum([cam[set_key] for cam in self.config[app]['cameras']])/len(self.config[app]['cameras'])         
 
-        # make a list of y coordinates from the result_list
+        # Make a list of y coordinates from the result_list
         y_list = [result[1]['y'] for result in result_list if result is not None and result[0] == 0]
         print(f"y_list: {y_list}")
         # Detect outliers
@@ -204,7 +197,6 @@ class AlambresWebApp:
 
             # Set point
             set_point = cam[set_key] 
-            result_list[index][1]['merma'] = merma
             result_list[index][1]['set_point'] = set_point
             
             # Get the result from the result_list by index
@@ -213,66 +205,65 @@ class AlambresWebApp:
                 print(f"None")
                 continue
 
-            if compensar:
-                diff = result - set_point + compensator
-                print(f"\t\t-> Operation: {diff} = {result} - {set_point} + {compensator}")
-            else:
-                diff = result - set_point
-                print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
+            # if compensar:
+            #     diff = result - set_point + compensator
+            #     print(f"\t\t-> Operation: {diff} = {result} - {set_point} + {compensator}")
+            # else:
+            diff = result - set_point
+            print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
             
             differences.append(diff)
             diff_ind.append(index)
         
-        # Align
-        if len(differences) <= 1:
-            # buscar el primer result de result_list que no sea None
-            try:
-                f_result = next((x for x in result_list if x is not None and x[0] == 0), None) 
-                align = f_result[1]['orientation']
-            except Exception as e:
-                print(f"Se produjo un error con el alineamiento: {e}")
-                align = 0
+        return differences, diff_ind
+    
+    def detection_execution(self, app):
+        """Return: {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image}}"""
+        # Execute detection
+        print("Executing detection...")
+        print(f"PLC: {self.plc_client.plc_states}")
+        
+        # Process app
+        app = f"app{app:02d}"
+        compensator = self.config[app]['nudo']/self.config['scale']['pix2mm']
 
+        # Get index from the "names" area inside "cameras": "cam02" -> 2, make a list with that if they are enabled
+        cam_list = [int(cam["name"][3:]) for cam in self.config[app]['cameras'] if self.config['cameras'][int(cam["name"][3:])]['enabled'] ]
+        disabled_list = [index for index, cam in enumerate(self.config[app]['cameras']) if not self.config['cameras'][int(cam["name"][3:])]['enabled']]
+        
+        # Execute detection
+        result_list = self.camera_manager.execute_detection(cam_list)
+
+        # Verify plc cut order
+        merma = self.plc_client.plc_states['TRIG_CUT']
+        if merma == True:
+            print("\t-> Merma ON -------------------------")
+            set_key = 'set-merma'
+            new_point = self.config[app]['merma'] / 10
+            error_mm = 0
+            align = 0
+            encoded_image = None
         else:
+            print("\t-> Merma OFF -------------------------")
+            set_key = 'set-point'  
+            differences, diff_ind = self.process_results(result_list, cam_list, app, compensator)
+            # Align
             align = self.calcular_pendiente(differences, diff_ind)
-        if abs(align) > self.config[app]['align']:
-            self.plc_client.cam_states["ErrAlig"] = True
-        print(f"align: {align}")
-        # print(f"Detection executed: {result_list}")
-        # Calculate error   
-        # funcion para iterar sobre las diferencias y si es mayor al 50% del compensador, restarle el compensador
-        if sum(differences)/len(differences) >= compensator*0.8:
-            differences = [diff - compensator for diff in differences]
-        error = sum(differences)/len(differences) if len(differences) > 0 else 0
-        error_mm = error * self.config['scale']['pix2mm']
-        if error_mm <=-20:
-            # Restaura compesador en differences
-            differences = [diff + compensator for diff in differences]
+            if abs(align) > self.config[app]['align']:
+                self.plc_client.cam_states["ErrAlig"] = True
+            print(f"align: {align}")
+            # Calculate error   
             error = sum(differences)/len(differences) if len(differences) > 0 else 0
             error_mm = error * self.config['scale']['pix2mm']
-        
-        print(f"New differences: {differences}")
+            print(f"New differences: {differences}")
+            # New point
+            new_point = self.plc_client.plc_struct['PV_POS'] + error_mm / 10
 
-        new_point = self.plc_client.plc_struct['PV_POS'] + error_mm/10
+            encoded_image = self.generate_images(cam_list, result_list)
+            print("-> Images captured : DONE")
+        
         print(f"-> NewPoint: {new_point}, PV_POS: {self.plc_client.plc_struct['PV_POS']}, Error: {error_mm} mm")
 
-        # Get images 
-        resp_images = self.camera_manager.get_images(cam_list)
-        # Process images
-        jpg_images = self.image_manager.generate_images(resp_images)
-        jpg_images = self.image_manager.proc_image(jpg_images, result_list)
-        img_path = os.path.join(os.path.dirname(__file__), r'lib/img')
-        # self.image_manager.save_images(jpg_images, path=img_path)
-        self.image_manager.save_image(jpg_images, path=img_path)
-        
-        with open(img_path + f"/all.jpg", "rb") as f:
-            image_data = f.read()
-        # Encode image data as base64 string
-        encoded_image = base64.b64encode(image_data).decode('utf-8')
-        print("-> Images captured : DONE")
-        
-        self.plc_client.cam_states['RUNNING'] = False
-        self.plc_client.cam_states['READY'] = True
         return {'new_point': new_point, 'error': error_mm, 'imagen': encoded_image, 'align': align, 'results_cam': result_list}
 
     def main(self):        
@@ -313,6 +304,9 @@ class AlambresWebApp:
                 self.plc_client.cam_struct["Error"] = resp['error']
                 # Update states    
                 self.prev_state = True # self.plc_client.plc_states["TRIG"]
+                
+                self.plc_client.cam_states['RUNNING'] = False
+                self.plc_client.cam_states['READY'] = True
                 self.plc_client.cam_states['READY_CUT'] = True
                 
     def web_requests(self, app):

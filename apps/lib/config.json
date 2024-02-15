@@ -38,6 +38,7 @@
         "description": "ajuste test de prueba",
         "nudo": 85,
         "align": 7,
+        "merma": 45,
         "cameras": [
             {
                 "name": "cam00",
@@ -51,6 +52,7 @@
         "description": "ajuste para corte de mallas de tipo 3 de 2m de ancho",
         "nudo": 80,
         "align": 22,
+        "merma": 45,
         "cameras": [
             {
                 "name": "cam00",
@@ -69,6 +71,7 @@
         "description": "ajuste para corte de mallas de tipo 3 de 2m de ancho",
         "nudo": 90,
         "align": 25,
+        "merma": 45,
         "cameras": [
             {
                 "name": "cam00",
@@ -97,6 +100,7 @@
         "description": "ajuste para corte de mallas de tipo 1 de 1m de ancho",    
         "nudo": 93,
         "align": 23,
+        "merma": 45,
         "cameras": [
             {
                 "name": "cam01",
@@ -110,6 +114,7 @@
         "description": "ajuste para corte de mallas de tipo 1 de 2m de ancho",
         "nudo": 93,
         "align": 23,
+        "merma": 45,
         "cameras": [
             {
                 "name": "cam02",
@@ -123,6 +128,7 @@
         "description": "ajuste para corte de mallas de tipo 2 de 2m de ancho",  
         "nudo": 93,
         "align": 23,
+        "merma": 45,
         "cameras": [
             {
                 "name": "cam03",
