@@ -71,7 +71,7 @@
         "description": "ajuste para corte de mallas de tipo 3 de 2m de ancho",
         "nudo": 90,
         "align": 25,
-        "merma": 45,
+        "merma": 50,
         "cameras": [
             {
                 "name": "cam00",

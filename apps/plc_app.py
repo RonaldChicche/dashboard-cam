@@ -204,17 +204,17 @@ class AlambresWebApp:
             if result is None:
                 print(f"None")
                 continue
-
-            # if compensar:
-            #     diff = result - set_point + compensator
-            #     print(f"\t\t-> Operation: {diff} = {result} - {set_point} + {compensator}")
-            # else:
+                
             diff = result - set_point
             print(f"\t\t-> Operation: {diff} = {result} - {set_point}")           
             
             differences.append(diff)
             diff_ind.append(index)
         
+        # Si mas de la mitad son valores None levantar el align erro
+        if len([x for x in outliers if x is not None]) < len(outliers)/2:
+            return [], []
+
         return differences, diff_ind
     
     def detection_execution(self, app):
@@ -247,6 +247,13 @@ class AlambresWebApp:
             print("\t-> Merma OFF -------------------------")
             set_key = 'set-point'  
             differences, diff_ind = self.process_results(result_list, cam_list, app, compensator)
+            # Si differences esta vacio, no se procesa
+            if len(differences) == 0:
+                print("No differences")
+                self.plc_client.cam_states["ErrAlig"] = True
+                encoded_image = self.generate_images(cam_list, result_list)
+
+                return {'new_point': 0, 'error': 0, 'imagen': encoded_image, 'align': 0, 'results_cam': result_list}
             # Align
             align = self.calcular_pendiente(differences, diff_ind)
             if abs(align) > self.config[app]['align']:
